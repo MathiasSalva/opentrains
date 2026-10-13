@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::dominio::{
-    Arribo, Estacion, EstacionId, Instalaciones, Linea, LineaId, Preferencias, Ramal, RamalId,
+    Arribo, Aviso, Estacion, EstacionId, Instalaciones, Linea, LineaId, Preferencias, Ramal,
+    RamalId, Seguimiento,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize)]
@@ -79,6 +80,11 @@ pub trait CatalogoCache {
 pub trait PreferenciasRepo {
     fn cargar(&self) -> Result<Preferencias, StorageError>;
     fn guardar(&self, preferencias: &Preferencias) -> Result<(), StorageError>;
+}
+
+/// Muestra un Aviso al usuario (en Windows, una notificación del sistema).
+pub trait Notificador {
+    fn notificar(&self, seguimiento: &Seguimiento, aviso: &Aviso);
 }
 
 pub trait Clock {

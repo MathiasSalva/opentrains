@@ -1,13 +1,18 @@
 //! Casos de uso: la API pública de `core` que consumen los adaptadores de entrada.
 
+use std::collections::BTreeSet;
 use std::future::Future;
+use std::sync::Mutex;
 
 use chrono::Duration;
 
-use crate::dominio::{Arribo, Estacion, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId};
+use crate::dominio::{
+    Arribo, Estacion, EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId,
+    Seguimiento,
+};
 use crate::puertos::{
     ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo,
-    EntradaCatalogo, PreferenciasRepo, SourceError, StorageError,
+    EntradaCatalogo, Notificador, PreferenciasRepo, SourceError, StorageError,
 };
 
 /// Arribos de un Favorito, listos para mostrar.
@@ -163,5 +168,82 @@ impl<P: PreferenciasRepo> Favoritos<P> {
         cambio(&mut preferencias);
         self.repo.guardar(&preferencias)?;
         Ok(preferencias)
+    }
+}
+
+/// Servicios que el usuario sigue y los Avisos que generan.
+pub struct Seguimientos<A, N, C> {
+    source: A,
+    notificador: N,
+    reloj: C,
+    activos: Mutex<Vec<Seguimiento>>,
+}
+
+impl<A: ArribosSource, N: Notificador, C: Clock> Seguimientos<A, N, C> {
+    pub fn new(source: A, notificador: N, reloj: C) -> Self {
+        Self {
+            source,
+            notificador,
+            reloj,
+            activos: Mutex::default(),
+        }
+    }
+
+    /// Seguir de nuevo el mismo Servicio en la misma Estación reemplaza el Seguimiento.
+    pub fn seguir(&self, seguimiento: Seguimiento) {
+        let mut activos = self.activos.lock().unwrap();
+        activos.retain(|s| !s.es_de(seguimiento.estacion, seguimiento.numero));
+        activos.push(seguimiento);
+    }
+
+    pub fn dejar_de_seguir(&self, estacion: EstacionId, numero: u32) {
+        self.activos
+            .lock()
+            .unwrap()
+            .retain(|s| !s.es_de(estacion, numero));
+    }
+
+    pub fn activos(&self) -> Vec<Seguimiento> {
+        self.activos.lock().unwrap().clone()
+    }
+
+    /// Consulta los Arribos de cada Estación con Seguimientos, notifica los Avisos y
+    /// termina los Seguimientos de Servicios que ya pasaron.
+    /// Si falla la consulta de una Estación, sus Seguimientos siguen intactos y se
+    /// devuelve el último error, después de revisar las demás.
+    pub async fn revisar(&self) -> Result<(), SourceError> {
+        let estaciones: BTreeSet<u32> = self.activos().iter().map(|s| s.estacion.0).collect();
+        let mut ultimo_error = None;
+        for estacion in estaciones.into_iter().map(EstacionId) {
+            let arribos = match self.source.arribos(estacion, None).await {
+                Ok(arribos) => arribos,
+                Err(error) => {
+                    ultimo_error = Some(error);
+                    continue;
+                }
+            };
+            let ahora = self.reloj.ahora();
+            let mut a_notificar = vec![];
+            self.activos.lock().unwrap().retain_mut(|seguimiento| {
+                if seguimiento.estacion != estacion {
+                    return true;
+                }
+                // Si el Servicio ya no figura en la Estación, pasó: el Seguimiento termina.
+                let Some(arribo) = arribos
+                    .iter()
+                    .find(|a| a.servicio.numero == seguimiento.numero)
+                else {
+                    return false;
+                };
+                for aviso in seguimiento.evaluar(arribo, ahora) {
+                    a_notificar.push((seguimiento.clone(), aviso));
+                }
+                true
+            });
+            for (seguimiento, aviso) in &a_notificar {
+                self.notificador.notificar(seguimiento, aviso);
+            }
+        }
+        ultimo_error.map_or(Ok(()), Err)
     }
 }

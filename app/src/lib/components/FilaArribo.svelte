@@ -3,6 +3,7 @@
   import { claseSituacion } from "$lib/arribos";
   import { cuentaRegresiva, hora } from "$lib/formato";
   import SituacionPill from "./SituacionPill.svelte";
+  import BotonAvisar from "./BotonAvisar.svelte";
 
   let { arribo, ahora }: { arribo: Arribo; ahora: number } = $props();
 
@@ -20,15 +21,16 @@
     </span>
   </div>
   <SituacionPill {arribo} {ahora} />
+  <BotonAvisar {arribo} />
 </div>
 
 <style>
   .fila {
     display: grid;
-    grid-template-columns: 4.2rem 1fr auto;
+    grid-template-columns: 4.2rem 1fr auto auto;
     align-items: center;
-    gap: 10px;
-    padding: 9px 10px 9px 14px;
+    gap: 6px 10px;
+    padding: 9px 6px 9px 14px;
     position: relative;
   }
   /* Barra con el color de la Situación: se lee de un vistazo al recorrer la lista. */

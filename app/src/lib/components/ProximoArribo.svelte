@@ -3,6 +3,7 @@
   import { claseSituacion, segundosRestantes } from "$lib/arribos";
   import { hora, partesCuenta } from "$lib/formato";
   import SituacionPill from "./SituacionPill.svelte";
+  import BotonAvisar from "./BotonAvisar.svelte";
 
   let { arribo, ahora }: { arribo: Arribo; ahora: number } = $props();
 
@@ -13,7 +14,10 @@
 <article class="proximo sit-{clase}" aria-label="Próximo tren">
   <div class="encabezado">
     <span class="rotulo">Próximo tren</span>
-    <SituacionPill {arribo} {ahora} />
+    <div class="lado">
+      <SituacionPill {arribo} {ahora} />
+      <BotonAvisar {arribo} />
+    </div>
   </div>
   <div class="cuerpo">
     <div class="cuenta">
@@ -58,6 +62,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .lado {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .rotulo {
     font-size: 0.8rem;

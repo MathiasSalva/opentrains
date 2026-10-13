@@ -43,7 +43,6 @@
     background: var(--superficie);
     border: 1px solid var(--borde);
     border-radius: 14px;
-    overflow: hidden;
   }
   header {
     display: flex;
@@ -78,6 +77,7 @@
     font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
+    border-radius: 0 0 13px 13px;
     transition: background-color 0.2s ease;
   }
   .mas:hover {

@@ -1,6 +1,7 @@
 //! Adaptador de entrada y punto de composición: conecta los casos de uso de `core`
 //! con los adaptadores de SOFSE y de almacenamiento, y los expone como comandos Tauri.
 
+mod avisos;
 #[cfg(desktop)]
 mod bandeja;
 
@@ -8,15 +9,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use opentrains_core::casos_de_uso::{Catalogo, ConsultaArribos, Favoritos};
+use opentrains_core::casos_de_uso::{Catalogo, ConsultaArribos, Favoritos, Seguimientos};
 use opentrains_core::dominio::{
     Arribo, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId, Preferencias, Ramal,
-    RamalId, Situacion,
+    RamalId, Seguimiento, Situacion,
 };
 use opentrains_core::puertos::{InstalacionesSource, SourceError, StorageError, SystemClock};
 use opentrains_sofse::SofseClient;
 use opentrains_storage::JsonStore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
 struct AppState {
@@ -24,6 +25,7 @@ struct AppState {
     arribos: ConsultaArribos<Arc<SofseClient>>,
     instalaciones: Arc<SofseClient>, // Sin lógica de dominio: el caso de uso sería un pasamanos.
     favoritos: Favoritos<Arc<JsonStore>>,
+    seguimientos: Arc<avisos::SeguimientosApp<tauri::Wry>>,
 }
 
 /// Errores tal como los ve el frontend.
@@ -134,6 +136,48 @@ fn abrir(app: State<'_, AppState>, favorito: Favorito) -> Result<Preferencias, A
     Ok(app.favoritos.abrir(favorito)?)
 }
 
+/// Pedido de Seguimiento desde la UI: el Servicio de un Arribo en la Estación abierta.
+#[derive(Deserialize)]
+struct PedidoSeguimiento {
+    estacion: EstacionId,
+    estacion_nombre: String,
+    numero: u32,
+    destino: String,
+    anticipacion_minutos: i64,
+}
+
+#[tauri::command]
+fn seguir(app: State<'_, AppState>, pedido: PedidoSeguimiento) -> Vec<Seguimiento> {
+    app.seguimientos.seguir(Seguimiento::nuevo(
+        pedido.estacion,
+        pedido.estacion_nombre,
+        pedido.numero,
+        pedido.destino,
+        pedido.anticipacion_minutos,
+    ));
+    // Revisión inmediata: si el tren ya está dentro de la anticipación, el Aviso llega ya.
+    let seguimientos = app.seguimientos.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = seguimientos.revisar().await;
+    });
+    app.seguimientos.activos()
+}
+
+#[tauri::command]
+fn dejar_de_seguir(
+    app: State<'_, AppState>,
+    estacion: EstacionId,
+    numero: u32,
+) -> Vec<Seguimiento> {
+    app.seguimientos.dejar_de_seguir(estacion, numero);
+    app.seguimientos.activos()
+}
+
+#[tauri::command]
+fn seguimientos(app: State<'_, AppState>) -> Vec<Seguimiento> {
+    app.seguimientos.activos()
+}
+
 /// Texto del ícono de la bandeja con el próximo tren; lo arma el frontend en cada refresco.
 #[tauri::command]
 fn actualizar_bandeja(app: tauri::AppHandle, texto: String) {
@@ -171,14 +215,22 @@ pub fn run() {
         )
         .manage(bandeja::EstadoPanel::default());
     builder
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let sofse = Arc::new(SofseClient::default());
             let store = Arc::new(JsonStore::new(directorio_datos(app)));
+            let seguimientos = Arc::new(Seguimientos::new(
+                sofse.clone(),
+                avisos::NotificadorSistema(app.handle().clone()),
+                SystemClock,
+            ));
+            avisos::vigilar(seguimientos.clone());
             app.manage(AppState {
                 catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),
+                seguimientos,
             });
             #[cfg(desktop)]
             {
@@ -203,7 +255,10 @@ pub fn run() {
             agregar_favorito,
             quitar_favorito,
             abrir,
-            actualizar_bandeja
+            actualizar_bandeja,
+            seguir,
+            dejar_de_seguir,
+            seguimientos
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar OpenTrains");

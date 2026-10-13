@@ -108,6 +108,98 @@ impl Arribo {
     }
 }
 
+/// Un Servicio que el usuario sigue en una Estación para recibir Avisos.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Seguimiento {
+    pub estacion: EstacionId,
+    pub estacion_nombre: String,
+    pub numero: u32,
+    pub destino: String,
+    /// Cuántos minutos antes del Arribo llega el recordatorio.
+    pub anticipacion_minutos: i64,
+    #[serde(default)]
+    pub recordatorio_enviado: bool,
+    #[serde(default)]
+    pub demora_avisada: Option<i64>,
+    #[serde(default)]
+    pub cancelacion_avisada: bool,
+}
+
+/// Algo que vale la pena avisarle al usuario sobre un Servicio que sigue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "tipo", rename_all = "snake_case")]
+pub enum Aviso {
+    /// Faltan `minutos` para que el Servicio pase por la Estación.
+    Recordatorio {
+        minutos: i64,
+    },
+    Demora {
+        minutos: i64,
+    },
+    Cancelado,
+}
+
+impl Seguimiento {
+    pub const DEMORA_MINIMA: i64 = 3;
+    pub const SALTO_DE_DEMORA: i64 = 3;
+
+    pub fn nuevo(
+        estacion: EstacionId,
+        estacion_nombre: impl Into<String>,
+        numero: u32,
+        destino: impl Into<String>,
+        anticipacion_minutos: i64,
+    ) -> Self {
+        Self {
+            estacion,
+            estacion_nombre: estacion_nombre.into(),
+            numero,
+            destino: destino.into(),
+            anticipacion_minutos,
+            recordatorio_enviado: false,
+            demora_avisada: None,
+            cancelacion_avisada: false,
+        }
+    }
+
+    pub fn es_de(&self, estacion: EstacionId, numero: u32) -> bool {
+        self.estacion == estacion && self.numero == numero
+    }
+
+    /// Avisos que corresponden según el estado actual del Arribo; recuerda lo ya avisado.
+    pub fn evaluar(&mut self, arribo: &Arribo, ahora: DateTime<Utc>) -> Vec<Aviso> {
+        let mut avisos = vec![];
+        // Un Servicio cancelado ya no va a pasar: no tiene sentido recordarlo ni su demora.
+        if arribo.servicio.cancelado {
+            if !self.cancelacion_avisada {
+                self.cancelacion_avisada = true;
+                avisos.push(Aviso::Cancelado);
+            }
+            return avisos;
+        }
+        if let Some(demora) = arribo.demora_minutos() {
+            let crecio = self
+                .demora_avisada
+                .is_none_or(|avisada| demora >= avisada + Self::SALTO_DE_DEMORA);
+            if demora >= Self::DEMORA_MINIMA && crecio {
+                self.demora_avisada = Some(demora);
+                avisos.push(Aviso::Demora { minutos: demora });
+            }
+        }
+        let faltan = arribo.momento - ahora;
+        if !self.recordatorio_enviado
+            && faltan > chrono::Duration::zero()
+            && faltan <= chrono::Duration::minutes(self.anticipacion_minutos)
+        {
+            self.recordatorio_enviado = true;
+            avisos.push(Aviso::Recordatorio {
+                minutos: faltan.num_minutes(),
+            });
+        }
+        avisos
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Instalaciones {
     pub direccion: Option<String>,

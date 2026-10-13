@@ -50,6 +50,14 @@ export interface Instalaciones {
   colectivos: string | null;
 }
 
+export interface Seguimiento {
+  estacion: number;
+  estacion_nombre: string;
+  numero: number;
+  destino: string;
+  anticipacion_minutos: number;
+}
+
 export type ErrorApp =
   | { tipo: "fuente"; detalle: { tipo: "sin_conexion"; detalle: string } | { tipo: "fuente_cambiada" } | { tipo: "respuesta_invalida"; detalle: string } }
   | { tipo: "almacenamiento"; detalle: string };
@@ -86,6 +94,10 @@ export const api = {
   quitarFavorito: (favorito: Favorito) => invoke<Preferencias>("quitar_favorito", { favorito }),
   abrir: (favorito: Favorito) => invoke<Preferencias>("abrir", { favorito }),
   actualizarBandeja: (texto: string) => invoke<void>("actualizar_bandeja", { texto }),
+  seguimientos: () => invoke<Seguimiento[]>("seguimientos"),
+  seguir: (pedido: Seguimiento) => invoke<Seguimiento[]>("seguir", { pedido }),
+  dejarDeSeguir: (estacion: number, numero: number) =>
+    invoke<Seguimiento[]>("dejar_de_seguir", { estacion, numero }),
 };
 
 export function mismoFavorito(a: Favorito, b: Favorito): boolean {

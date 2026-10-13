@@ -26,6 +26,7 @@
   import ProximoArribo from "$lib/components/ProximoArribo.svelte";
   import GrupoRamal from "$lib/components/GrupoRamal.svelte";
   import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
+  import { recargarSeguimientos, seguimientos } from "$lib/seguimientos.svelte";
 
   const REFRESCO_MS = 45_000;
 
@@ -113,6 +114,7 @@
 
   async function abrir(favorito: Favorito) {
     actual = favorito;
+    seguimientos.estacion = { id: favorito.estacion, nombre: favorito.estacion_nombre };
     arribos = [];
     ultimaActualizacion = null;
     errorArribos = null;
@@ -139,6 +141,7 @@
       errorArribos = null;
       fuenteCambiada = false;
       api.actualizarBandeja(textoBandeja(actual.estacion_nombre, nuevos)).catch(() => {});
+      recargarSeguimientos();
     } catch (e) {
       if (consulta !== ultimaConsulta) return;
       errorArribos = describirError(e);
