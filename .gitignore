@@ -1,0 +1,12 @@
+# Artefactos de ingeniería inversa
+*.apk
+
+# Rust
+/target/
+
+# Node / Tauri frontend
+node_modules/
+dist/
+
+# Herramientas locales
+.claude/settings.local.json

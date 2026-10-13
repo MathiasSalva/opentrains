@@ -1,0 +1,12 @@
+[package]
+name = "opentrains-core"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
