@@ -1,0 +1,13 @@
+[package]
+name = "opentrains-storage"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+opentrains-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+chrono.workspace = true
+tempfile = "3"
