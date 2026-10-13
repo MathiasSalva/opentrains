@@ -1,6 +1,6 @@
 # MVP de OpenTrains
 
-Status: ready-for-agent
+Status: ready-for-human
 
 Ver `CONTEXT.md` para el glosario y `docs/adr/` para las decisiones de arquitectura.
 
@@ -36,3 +36,10 @@ Mapa, estaciones cercanas, notificaciones, cuentas de usuario y tray.
 - `crates/sofse`: adaptador de la API.
 - `crates/storage`: archivos JSON en `%APPDATA%\OpenTrains`.
 - `app/`: Tauri 2 con Svelte + TypeScript.
+
+## Comments
+
+**2026-10-13 — implementado.** El MVP está completo en `main`. Quedan para revisión humana:
+- Se recuerda la última Estación abierta, sea o no un Favorito.
+- La pausa al minimizar se verificó por API (`isMinimized`), no minimizando a mano.
+- Un Servicio sin estado informado se muestra como "Sin informar", en gris.

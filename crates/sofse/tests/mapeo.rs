@@ -86,7 +86,11 @@ fn las_estaciones_se_ordenan_por_orden_y_convierten_sus_campos_de_texto() {
 
 #[test]
 fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
-    let arribos = mapeo::arribos(&fixture("arribos.json")).unwrap();
+    // El momento se ancla a cuándo recibimos la respuesta (reloj local), no al
+    // `timestamp` del servidor (00:48:00): así un desfase de relojes no corre la
+    // cuenta regresiva.
+    let recibido = t("2026-10-13T00:50:00Z");
+    let arribos = mapeo::arribos(&fixture("arribos.json"), recibido).unwrap();
 
     assert_eq!(
         arribos,
@@ -111,7 +115,7 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                 anden: Some("3".into()),
                 programada: t("2026-10-13T00:48:00Z"),
                 estimada: None,
-                momento: t("2026-10-13T00:48:00Z"),
+                momento: t("2026-10-13T00:50:00Z"),
             },
             Arribo {
                 servicio: Servicio {
@@ -132,7 +136,7 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                 anden: Some("2".into()),
                 programada: t("2026-10-13T01:04:00Z"),
                 estimada: Some(t("2026-10-13T01:08:30Z")),
-                momento: t("2026-10-13T01:08:30Z"),
+                momento: t("2026-10-13T01:10:30Z"),
             },
             Arribo {
                 servicio: Servicio {
@@ -153,7 +157,7 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                 anden: None,
                 programada: t("2026-10-13T01:20:00Z"),
                 estimada: None,
-                momento: t("2026-10-13T01:08:00Z"),
+                momento: t("2026-10-13T01:10:00Z"),
             },
         ]
     );

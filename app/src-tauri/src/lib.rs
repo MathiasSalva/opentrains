@@ -10,36 +10,36 @@ use opentrains_core::dominio::{
     Arribo, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId, Preferencias, Ramal,
     RamalId, Tono,
 };
-use opentrains_core::puertos::{InstalacionesSource, RelojSistema, SourceError, StorageError};
+use opentrains_core::puertos::{InstalacionesSource, SourceError, StorageError, SystemClock};
 use opentrains_sofse::SofseClient;
 use opentrains_storage::JsonStore;
 use serde::Serialize;
 use tauri::{Manager, State};
 
-struct Estado {
-    catalogo: Catalogo<Arc<SofseClient>, Arc<JsonStore>, RelojSistema>,
+struct AppState {
+    catalogo: Catalogo<Arc<SofseClient>, Arc<JsonStore>, SystemClock>,
     arribos: ConsultaArribos<Arc<SofseClient>>,
-    instalaciones: Arc<SofseClient>,
+    instalaciones: Arc<SofseClient>, // Sin lógica de dominio: el caso de uso sería un pasamanos.
     favoritos: Favoritos<Arc<JsonStore>>,
 }
 
 /// Errores tal como los ve el frontend.
 #[derive(Serialize)]
 #[serde(tag = "tipo", content = "detalle", rename_all = "snake_case")]
-enum ErrorApp {
+enum AppError {
     Fuente(SourceError),
     Almacenamiento(String),
 }
 
-impl From<SourceError> for ErrorApp {
+impl From<SourceError> for AppError {
     fn from(error: SourceError) -> Self {
-        ErrorApp::Fuente(error)
+        AppError::Fuente(error)
     }
 }
 
-impl From<StorageError> for ErrorApp {
+impl From<StorageError> for AppError {
     fn from(error: StorageError) -> Self {
-        ErrorApp::Almacenamiento(error.0)
+        AppError::Almacenamiento(error.0)
     }
 }
 
@@ -78,64 +78,58 @@ impl From<Arribo> for ArriboVista {
 }
 
 #[tauri::command]
-async fn lineas(estado: State<'_, Estado>) -> Result<Vec<Linea>, ErrorApp> {
-    Ok(estado.catalogo.lineas().await?)
+async fn lineas(app: State<'_, AppState>) -> Result<Vec<Linea>, AppError> {
+    Ok(app.catalogo.lineas().await?)
 }
 
 #[tauri::command]
-async fn ramales(estado: State<'_, Estado>, linea: u32) -> Result<Vec<Ramal>, ErrorApp> {
-    Ok(estado.catalogo.ramales(LineaId(linea)).await?)
+async fn ramales(app: State<'_, AppState>, linea: LineaId) -> Result<Vec<Ramal>, AppError> {
+    Ok(app.catalogo.ramales(linea).await?)
 }
 
 #[tauri::command]
-async fn estaciones(estado: State<'_, Estado>, ramal: u32) -> Result<Vec<Estacion>, ErrorApp> {
-    Ok(estado.catalogo.estaciones(RamalId(ramal)).await?)
+async fn estaciones(app: State<'_, AppState>, ramal: RamalId) -> Result<Vec<Estacion>, AppError> {
+    Ok(app.catalogo.estaciones(ramal).await?)
 }
 
 #[tauri::command]
 async fn arribos(
-    estado: State<'_, Estado>,
+    app: State<'_, AppState>,
     favorito: Favorito,
-) -> Result<Vec<ArriboVista>, ErrorApp> {
-    let arribos = estado.arribos.arribos(&favorito).await?;
+) -> Result<Vec<ArriboVista>, AppError> {
+    let arribos = app.arribos.arribos(&favorito).await?;
     Ok(arribos.into_iter().map(ArriboVista::from).collect())
 }
 
 #[tauri::command]
 async fn instalaciones(
-    estado: State<'_, Estado>,
-    estacion: u32,
-) -> Result<Option<Instalaciones>, ErrorApp> {
-    Ok(estado
-        .instalaciones
-        .instalaciones(EstacionId(estacion))
-        .await?)
+    app: State<'_, AppState>,
+    estacion: EstacionId,
+) -> Result<Option<Instalaciones>, AppError> {
+    Ok(app.instalaciones.instalaciones(estacion).await?)
 }
 
 #[tauri::command]
-fn preferencias(estado: State<'_, Estado>) -> Result<Preferencias, ErrorApp> {
-    Ok(estado.favoritos.preferencias()?)
+fn preferencias(app: State<'_, AppState>) -> Result<Preferencias, AppError> {
+    Ok(app.favoritos.preferencias()?)
 }
 
 #[tauri::command]
 fn agregar_favorito(
-    estado: State<'_, Estado>,
+    app: State<'_, AppState>,
     favorito: Favorito,
-) -> Result<Preferencias, ErrorApp> {
-    Ok(estado.favoritos.agregar(favorito)?)
+) -> Result<Preferencias, AppError> {
+    Ok(app.favoritos.agregar(favorito)?)
 }
 
 #[tauri::command]
-fn quitar_favorito(
-    estado: State<'_, Estado>,
-    favorito: Favorito,
-) -> Result<Preferencias, ErrorApp> {
-    Ok(estado.favoritos.quitar(&favorito)?)
+fn quitar_favorito(app: State<'_, AppState>, favorito: Favorito) -> Result<Preferencias, AppError> {
+    Ok(app.favoritos.quitar(&favorito)?)
 }
 
 #[tauri::command]
-fn abrir(estado: State<'_, Estado>, favorito: Favorito) -> Result<Preferencias, ErrorApp> {
-    Ok(estado.favoritos.abrir(favorito)?)
+fn abrir(app: State<'_, AppState>, favorito: Favorito) -> Result<Preferencias, AppError> {
+    Ok(app.favoritos.abrir(favorito)?)
 }
 
 /// `%APPDATA%\OpenTrains` en Windows; el directorio de datos de la app en otras plataformas.
@@ -155,8 +149,8 @@ pub fn run() {
         .setup(|app| {
             let sofse = Arc::new(SofseClient::default());
             let store = Arc::new(JsonStore::new(directorio_datos(app)));
-            app.manage(Estado {
-                catalogo: Catalogo::new(sofse.clone(), store.clone(), RelojSistema),
+            app.manage(AppState {
+                catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),

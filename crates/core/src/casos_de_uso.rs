@@ -6,8 +6,8 @@ use chrono::Duration;
 
 use crate::dominio::{Arribo, Estacion, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId};
 use crate::puertos::{
-    ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, DatosCatalogo, EntradaCatalogo,
-    PreferenciasRepo, Reloj, SourceError, StorageError,
+    ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo,
+    EntradaCatalogo, PreferenciasRepo, SourceError, StorageError,
 };
 
 /// Arribos de un Favorito, listos para mostrar.
@@ -42,7 +42,7 @@ pub struct Catalogo<S, C, R> {
     reloj: R,
 }
 
-impl<S: CatalogoSource, C: CatalogoCache, R: Reloj> Catalogo<S, C, R> {
+impl<S: CatalogoSource, C: CatalogoCache, R: Clock> Catalogo<S, C, R> {
     pub const VIGENCIA_DIAS: i64 = 7;
 
     pub fn new(source: S, cache: C, reloj: R) -> Self {

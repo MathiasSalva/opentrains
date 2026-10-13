@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use opentrains_core::casos_de_uso::Catalogo;
 use opentrains_core::dominio::{Estacion, EstacionId, Linea, LineaId, Ramal, RamalId};
 use opentrains_core::puertos::{
-    CatalogoCache, CatalogoSource, ClaveCatalogo, DatosCatalogo, EntradaCatalogo, Reloj,
+    CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo, EntradaCatalogo,
     SourceError, StorageError,
 };
 use std::cell::{Cell, RefCell};
@@ -71,7 +71,7 @@ impl CatalogoCache for &FakeCache {
 
 struct RelojFijo(DateTime<Utc>);
 
-impl Reloj for RelojFijo {
+impl Clock for RelojFijo {
     fn ahora(&self) -> DateTime<Utc> {
         self.0
     }

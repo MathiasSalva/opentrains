@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     api,
     describirError,
@@ -34,6 +35,9 @@
   let errorArribos = $state<string | null>(null);
   let fuenteCambiada = $state(false);
   let cargando = $state(false);
+  // Cada refresco lleva un número: si mientras tanto se abrió otra estación o se lanzó
+  // otro refresco, la respuesta vieja se descarta.
+  let ultimaConsulta = 0;
 
   let instalaciones = $state<Instalaciones | null | undefined>(undefined);
   let verInstalaciones = $state(false);
@@ -44,7 +48,7 @@
     actual !== null && preferencias.favoritos.some((f) => mismoFavorito(f, actual!)),
   );
   const desactualizado = $derived(
-    errorArribos !== null && ultimaActualizacion !== null && arribos.length > 0,
+    errorArribos !== null && ultimaActualizacion !== null,
   );
 
   async function cargarLineas() {
@@ -110,22 +114,22 @@
   }
 
   async function refrescar() {
-    if (!actual || cargando) return;
-    const consultado = actual;
+    if (!actual) return;
+    const consulta = ++ultimaConsulta;
     cargando = true;
     try {
-      const nuevos = await api.arribos(consultado);
-      if (actual !== consultado) return;
+      const nuevos = await api.arribos($state.snapshot(actual));
+      if (consulta !== ultimaConsulta) return;
       arribos = nuevos;
       ultimaActualizacion = Date.now();
       errorArribos = null;
       fuenteCambiada = false;
     } catch (e) {
-      if (actual !== consultado) return;
+      if (consulta !== ultimaConsulta) return;
       errorArribos = describirError(e);
       fuenteCambiada = esFuenteCambiada(e);
     } finally {
-      cargando = false;
+      if (consulta === ultimaConsulta) cargando = false;
     }
   }
 
@@ -167,19 +171,25 @@
     })();
 
     // Refresco cada 45 s y cuenta regresiva cada 1 s, solo con la ventana visible.
-    const visible = () => document.visibilityState === "visible";
-    const refresco = setInterval(() => visible() && refrescar(), REFRESCO_MS);
-    const reloj = setInterval(() => visible() && (ahora = Date.now()), 1_000);
-    const alVolver = () => {
-      if (!visible()) return;
+    // WebView2 no siempre marca el documento como oculto al minimizar, así que también
+    // se consulta el estado de la ventana.
+    const ventana = getCurrentWindow();
+    const visible = async () =>
+      document.visibilityState === "visible" && !(await ventana.isMinimized());
+    const refresco = setInterval(async () => (await visible()) && refrescar(), REFRESCO_MS);
+    const reloj = setInterval(() => (ahora = Date.now()), 1_000);
+    const alVolver = async () => {
+      if (!(await visible())) return;
       ahora = Date.now();
       if (ultimaActualizacion === null || ahora - ultimaActualizacion >= REFRESCO_MS) refrescar();
     };
     document.addEventListener("visibilitychange", alVolver);
+    const dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alVolver());
     return () => {
       clearInterval(refresco);
       clearInterval(reloj);
       document.removeEventListener("visibilitychange", alVolver);
+      dejarDeEscuchar.then((fn) => fn());
     };
   });
 </script>
@@ -284,8 +294,8 @@
         {#each arribos as arribo (`${arribo.numero}-${arribo.momento}`)}
           <li class="arribo {arribo.tono}">
             <div class="cuenta">{cuentaRegresiva(arribo.momento, ahora)}</div>
-            <div class="detalle">
-              <div class="destino" class:tachado={arribo.cancelado}>a {arribo.destino}</div>
+            <div class="detalle" class:tachado={arribo.cancelado}>
+              <div class="destino">a {arribo.destino}</div>
               <div class="meta">
                 {hora(arribo.programada)}
                 {#if arribo.demora_minutos !== null}

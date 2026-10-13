@@ -88,7 +88,6 @@ fn decimal(texto: &str) -> Result<f64, SourceError> {
 
 #[derive(Deserialize)]
 struct ApiArribos {
-    timestamp: i64,
     results: Vec<ApiResultado>,
 }
 
@@ -151,17 +150,18 @@ struct ApiNombre {
     nombre: Option<String>,
 }
 
-pub fn arribos(json: &str) -> Result<Vec<Arribo>, SourceError> {
+/// `recibido` es el momento (reloj local) en que llegó la respuesta: la cuenta regresiva
+/// `segundos` se ancla ahí y no al `timestamp` del servidor, para que un desfase entre
+/// relojes no la corra.
+pub fn arribos(json: &str, recibido: DateTime<Utc>) -> Result<Vec<Arribo>, SourceError> {
     let api: ApiArribos = parsear(json)?;
-    let consultado = DateTime::from_timestamp(api.timestamp, 0)
-        .ok_or_else(|| SourceError::RespuestaInvalida("timestamp inválido".into()))?;
     api.results
         .into_iter()
-        .map(|r| arribo(r, consultado))
+        .map(|r| arribo(r, recibido))
         .collect()
 }
 
-fn arribo(r: ApiResultado, consultado: DateTime<Utc>) -> Result<Arribo, SourceError> {
+fn arribo(r: ApiResultado, recibido: DateTime<Utc>) -> Result<Arribo, SourceError> {
     // En la cabecera de origen no hay llegada: el horario relevante es la salida.
     let horario = [r.arribo.llegada, r.arribo.salida]
         .into_iter()
@@ -172,7 +172,7 @@ fn arribo(r: ApiResultado, consultado: DateTime<Utc>) -> Result<Arribo, SourceEr
         })?;
     let programada = horario.programada.expect("filtrado arriba");
     let momento = match r.arribo.segundos {
-        Some(segundos) => consultado + Duration::seconds(segundos),
+        Some(segundos) => recibido + Duration::seconds(segundos),
         None => horario.estimada.unwrap_or(programada),
     };
     let s = r.servicio;

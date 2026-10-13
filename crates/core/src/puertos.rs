@@ -81,13 +81,13 @@ pub trait PreferenciasRepo {
     fn guardar(&self, preferencias: &Preferencias) -> Result<(), StorageError>;
 }
 
-pub trait Reloj {
+pub trait Clock {
     fn ahora(&self) -> DateTime<Utc>;
 }
 
-pub struct RelojSistema;
+pub struct SystemClock;
 
-impl Reloj for RelojSistema {
+impl Clock for SystemClock {
     fn ahora(&self) -> DateTime<Utc> {
         Utc::now()
     }
@@ -136,5 +136,14 @@ impl<T: PreferenciasRepo> PreferenciasRepo for std::sync::Arc<T> {
     }
     fn guardar(&self, preferencias: &Preferencias) -> Result<(), StorageError> {
         (**self).guardar(preferencias)
+    }
+}
+
+impl<T: InstalacionesSource> InstalacionesSource for std::sync::Arc<T> {
+    async fn instalaciones(
+        &self,
+        estacion: EstacionId,
+    ) -> Result<Option<Instalaciones>, SourceError> {
+        (**self).instalaciones(estacion).await
     }
 }

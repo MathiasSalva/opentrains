@@ -419,7 +419,7 @@ en Retiro andén 3, salida 00:48Z, rumbo a Pilar, a 179 m y 2 km/h.
 ## 10. Pendientes / no verificado
 
 - Mapa completo de códigos `estado.id` → etiqueta/color. Conocidos: `10` Programado,
-  `25` En Andén, `35` Partió; faltan los de demora/cancelado/info y su color exacto.
+  `25` En Andén, `35` Partió. Visto en vivo sin id registrado: "Confirmado" (2026-10-13); faltan los de demora/cancelado/info y su color exacto.
 - `servicios/tipos`: da 404 sin parámetros (§7f); se desconoce la firma correcta (si existe).
   No es bloqueante: el `tipo` ya viene en cada arribo.
 - Flujos que requieren cuenta real y no se ejercitaron en vivo (solo análisis estático):

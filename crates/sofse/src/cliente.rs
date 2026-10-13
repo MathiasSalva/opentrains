@@ -58,26 +58,26 @@ impl SofseClient {
         let url = format!("{}{ruta}", self.api);
         let token = self.token(false).await?;
         match self.get(&url, Some(&token)).await {
-            Err(Rechazo::NoAutorizado) => {
+            Err(Rejection::NoAutorizado) => {
                 let token = self.token(true).await?;
                 self.get(&url, Some(&token))
                     .await
-                    .map_err(Rechazo::en_error)
+                    .map_err(Rejection::en_error)
             }
-            otro => otro.map_err(Rechazo::en_error),
+            otro => otro.map_err(Rejection::en_error),
         }
     }
 
-    async fn get(&self, url: &str, token: Option<&str>) -> Result<String, Rechazo> {
+    async fn get(&self, url: &str, token: Option<&str>) -> Result<String, Rejection> {
         let mut pedido = self.http.get(url);
         if let Some(token) = token {
             pedido = pedido.header("Authorization", token);
         }
         let respuesta = pedido.send().await.map_err(sin_conexion)?;
         match respuesta.status() {
-            StatusCode::UNAUTHORIZED => Err(Rechazo::NoAutorizado),
+            StatusCode::UNAUTHORIZED => Err(Rejection::NoAutorizado),
             s if s.is_success() => respuesta.text().await.map_err(|e| sin_conexion(e).into()),
-            s => Err(Rechazo::Error(SourceError::RespuestaInvalida(format!(
+            s => Err(Rejection::Error(SourceError::RespuestaInvalida(format!(
                 "HTTP {s} en {url}"
             )))),
         }
@@ -119,22 +119,22 @@ impl SofseClient {
     }
 }
 
-enum Rechazo {
+enum Rejection {
     NoAutorizado,
     Error(SourceError),
 }
 
-impl From<SourceError> for Rechazo {
+impl From<SourceError> for Rejection {
     fn from(error: SourceError) -> Self {
-        Rechazo::Error(error)
+        Rejection::Error(error)
     }
 }
 
-impl Rechazo {
+impl Rejection {
     fn en_error(self) -> SourceError {
         match self {
-            Rechazo::NoAutorizado => SourceError::FuenteCambiada,
-            Rechazo::Error(e) => e,
+            Rejection::NoAutorizado => SourceError::FuenteCambiada,
+            Rejection::Error(e) => e,
         }
     }
 }
@@ -173,7 +173,8 @@ impl ArribosSource for SofseClient {
         if let Some(ramal) = ramal {
             ruta.push_str(&format!("?ramal={}", ramal.0));
         }
-        mapeo::arribos(&self.get_autenticado(&ruta).await?)
+        let json = self.get_autenticado(&ruta).await?;
+        mapeo::arribos(&json, Utc::now())
     }
 }
 
@@ -184,7 +185,7 @@ impl InstalacionesSource for SofseClient {
     ) -> Result<Option<Instalaciones>, SourceError> {
         // Endpoint público: no lleva token.
         let url = format!("{}{}", self.infoestaciones, estacion.0);
-        let json = self.get(&url, None).await.map_err(Rechazo::en_error)?;
+        let json = self.get(&url, None).await.map_err(Rejection::en_error)?;
         mapeo::instalaciones(&json)
     }
 }
