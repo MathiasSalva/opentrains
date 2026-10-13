@@ -14,7 +14,18 @@
     type Preferencias,
     type Ramal,
   } from "$lib/api";
-  import { cuentaRegresiva, hace, hora } from "$lib/formato";
+  import { fade, fly, slide } from "svelte/transition";
+  import StarIcon from "phosphor-svelte/lib/StarIcon";
+  import ArrowClockwiseIcon from "phosphor-svelte/lib/ArrowClockwiseIcon";
+  import CaretRightIcon from "phosphor-svelte/lib/CaretRightIcon";
+  import WarningIcon from "phosphor-svelte/lib/WarningIcon";
+  import WifiSlashIcon from "phosphor-svelte/lib/WifiSlashIcon";
+  import { agruparPorRamal, clave, proximo } from "$lib/arribos";
+  import { hace } from "$lib/formato";
+  import { duracion, EASE } from "$lib/movimiento";
+  import ProximoArribo from "$lib/components/ProximoArribo.svelte";
+  import GrupoRamal from "$lib/components/GrupoRamal.svelte";
+  import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
 
   const REFRESCO_MS = 45_000;
 
@@ -26,7 +37,8 @@
   let lineaId = $state<number | null>(null);
   let ramalId = $state<number | null>(null);
   let estacionId = $state<number | null>(null);
-  let soloEsteRamal = $state(true);
+  // Por defecto se ven todos los Ramales de la Estación, agrupados.
+  let soloEsteRamal = $state(false);
   let errorCatalogo = $state<string | null>(null);
 
   let actual = $state<Favorito | null>(null);
@@ -47,6 +59,8 @@
   const esFavorito = $derived(
     actual !== null && preferencias.favoritos.some((f) => mismoFavorito(f, actual!)),
   );
+  const destacado = $derived(proximo(arribos));
+  const grupos = $derived(agruparPorRamal(arribos.filter((a) => a !== destacado)));
   const desactualizado = $derived(
     errorArribos !== null && ultimaActualizacion !== null,
   );
@@ -195,7 +209,7 @@
 </script>
 
 <main>
-  <header>
+  <header class="barra">
     <h1>OpenTrains</h1>
   </header>
 
@@ -205,15 +219,18 @@
         <button
           class="chip"
           class:activo={actual !== null && mismoFavorito(favorito, actual)}
-          onclick={() => abrir(favorito)}>★ {etiqueta(favorito)}</button
+          onclick={() => abrir(favorito)}
         >
+          <StarIcon size={13} weight="fill" />
+          {etiqueta(favorito)}
+        </button>
       {/each}
     </nav>
   {/if}
 
-  <section class="selector">
+  <section class="selector panel">
     <label>
-      Línea
+      <span>Línea</span>
       <select bind:value={lineaId} onchange={elegirLinea}>
         <option value={null}>Elegí una línea</option>
         {#each lineas as linea}
@@ -221,121 +238,144 @@
         {/each}
       </select>
     </label>
-    <label>
-      Ramal
-      <select bind:value={ramalId} onchange={elegirRamal} disabled={ramales.length === 0}>
-        <option value={null}>Elegí un ramal</option>
-        {#each ramales as ramal}
-          <option value={ramal.id}>{ramal.nombre}</option>
-        {/each}
-      </select>
-    </label>
-    <label>
-      Estación
-      <select
-        bind:value={estacionId}
-        onchange={elegirEstacion}
-        disabled={estaciones.length === 0}
-      >
-        <option value={null}>Elegí una estación</option>
-        {#each estaciones as estacion}
-          <option value={estacion.id}>{estacion.nombre}</option>
-        {/each}
-      </select>
-    </label>
+    <div class="par">
+      <label>
+        <span>Ramal</span>
+        <select bind:value={ramalId} onchange={elegirRamal} disabled={ramales.length === 0}>
+          <option value={null}>Elegí un ramal</option>
+          {#each ramales as ramal}
+            <option value={ramal.id}>{ramal.nombre}</option>
+          {/each}
+        </select>
+      </label>
+      <label>
+        <span>Estación</span>
+        <select
+          bind:value={estacionId}
+          onchange={elegirEstacion}
+          disabled={estaciones.length === 0}
+        >
+          <option value={null}>Elegí una estación</option>
+          {#each estaciones as estacion}
+            <option value={estacion.id}>{estacion.nombre}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
     <label class="check">
       <input type="checkbox" bind:checked={soloEsteRamal} onchange={elegirEstacion} />
-      Solo este ramal
+      <span>Solo el ramal elegido</span>
     </label>
     {#if errorCatalogo}
       <p class="aviso error">
-        {errorCatalogo} <button class="link" onclick={cargarLineas}>Reintentar</button>
+        <WarningIcon size={16} weight="bold" />
+        <span>{errorCatalogo}</span>
+        <button class="enlace" onclick={cargarLineas}>Reintentar</button>
       </p>
     {/if}
   </section>
 
   {#if actual}
-    <section class="arribos">
+    <section class="estacion">
       <div class="titulo">
         <div>
           <h2>{actual.estacion_nombre}</h2>
-          <p class="sub">{actual.ramal ? actual.ramal.nombre : "Todos los ramales"}</p>
+          <p class="sub">
+            <span>{actual.ramal ? actual.ramal.nombre : "Todos los ramales"}</span>
+            {#if ultimaActualizacion !== null && !desactualizado}
+              <span class="sello">Actualizado hace {hace(ultimaActualizacion, ahora)}</span>
+            {/if}
+          </p>
         </div>
         <div class="acciones">
           <button
             class="icono"
+            class:marcado={esFavorito}
             title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
             aria-pressed={esFavorito}
-            onclick={alternarFavorito}>{esFavorito ? "★" : "☆"}</button
+            onclick={alternarFavorito}
           >
-          <button class="icono" title="Actualizar" disabled={cargando} onclick={refrescar}
-            >⟳</button
+            <StarIcon size={20} weight={esFavorito ? "fill" : "regular"} />
+          </button>
+          <button
+            class="icono"
+            class:girando={cargando}
+            title="Actualizar"
+            disabled={cargando}
+            onclick={refrescar}
           >
+            <ArrowClockwiseIcon size={20} weight="bold" />
+          </button>
         </div>
       </div>
 
       {#if fuenteCambiada}
-        <p class="aviso error">{errorArribos}</p>
+        <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
+          <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
+        </p>
       {:else if desactualizado}
-        <p class="aviso">
-          Desactualizado — última actualización hace {hace(ultimaActualizacion!, ahora)}
+        <p class="aviso" transition:slide={{ duration: duracion(200) }}>
+          <WifiSlashIcon size={16} weight="bold" />
+          <span>Desactualizado, última actualización hace {hace(ultimaActualizacion!, ahora)}</span>
         </p>
       {:else if errorArribos}
-        <p class="aviso error">{errorArribos}</p>
+        <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
+          <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
+        </p>
       {/if}
 
-      {#if cargando && ultimaActualizacion === null}
-        <p class="vacio">Cargando…</p>
+      {#if ultimaActualizacion === null && cargando}
+        <SkeletonArribos />
       {:else if ultimaActualizacion !== null && arribos.length === 0}
-        <p class="vacio">No hay próximos trenes informados.</p>
-      {/if}
-
-      <ul>
-        {#each arribos as arribo (`${arribo.numero}-${arribo.momento}`)}
-          <li class="arribo {arribo.tono}">
-            <div class="cuenta">{cuentaRegresiva(arribo.momento, ahora)}</div>
-            <div class="detalle" class:tachado={arribo.cancelado}>
-              <div class="destino">a {arribo.destino}</div>
-              <div class="meta">
-                {hora(arribo.programada)}
-                {#if arribo.demora_minutos !== null}
-                  <span class="demora">+{arribo.demora_minutos} min</span>
-                {/if}
-                {#if arribo.anden}· Andén {arribo.anden}{/if}
-                · #{arribo.numero}
-              </div>
+        <div class="vacio" in:fade={{ duration: duracion(200) }}>
+          <strong>No hay próximos trenes informados</strong>
+          <span>Probá con todos los ramales o volvé a consultar en unos minutos.</span>
+        </div>
+      {:else}
+        {#if destacado}
+          {#key clave(destacado)}
+            <div in:fly={{ y: 12, duration: duracion(380), easing: EASE }}>
+              <ProximoArribo arribo={destacado} {ahora} />
             </div>
-            <span class="estado">{arribo.cancelado ? "Cancelado" : arribo.estado}</span>
-          </li>
+          {/key}
+        {/if}
+        {#each grupos as grupo (grupo.ramal.id)}
+          <div in:fly={{ y: 12, duration: duracion(320), easing: EASE }}>
+            <GrupoRamal {grupo} {ahora} />
+          </div>
         {/each}
-      </ul>
-      {#if ultimaActualizacion !== null && !desactualizado}
-        <p class="pie">Actualizado hace {hace(ultimaActualizacion, ahora)}</p>
       {/if}
     </section>
 
-    <section class="instalaciones">
-      <button class="link" onclick={alternarInstalaciones}>
-        {verInstalaciones ? "▾" : "▸"} Instalaciones de la estación
+    <section class="panel instalaciones">
+      <button class="desplegar" aria-expanded={verInstalaciones} onclick={alternarInstalaciones}>
+        <span class="caret" class:abierto={verInstalaciones}>
+          <CaretRightIcon size={14} weight="bold" />
+        </span>
+        Instalaciones de la estación
       </button>
       {#if verInstalaciones}
-        {#if instalaciones === undefined}
-          <p class="vacio">Cargando…</p>
-        {:else if instalaciones === null}
-          <p class="vacio">Sin información para esta estación.</p>
-        {:else}
-          <ul class="instalaciones-lista">
-            <li class:no={!instalaciones.ascensor}>Ascensor</li>
-            <li class:no={!instalaciones.rampa}>Rampa</li>
-            <li class:no={!instalaciones.banos}>Baños</li>
-            <li class:no={!instalaciones.wifi}>Wifi</li>
-            <li class:no={!instalaciones.terminal_sube}>Carga SUBE</li>
-          </ul>
-          {#if instalaciones.boleteria}<p><strong>Boletería:</strong> {instalaciones.boleteria}</p>{/if}
-          {#if instalaciones.direccion}<p><strong>Dirección:</strong> {instalaciones.direccion}</p>{/if}
-          {#if instalaciones.conexiones}<p><strong>Conexiones:</strong> {instalaciones.conexiones}</p>{/if}
-          {#if instalaciones.colectivos}<p><strong>Colectivos:</strong> {instalaciones.colectivos}</p>{/if}
-        {/if}
+        <div transition:slide={{ duration: duracion(220) }}>
+          {#if instalaciones === undefined}
+            <p class="tenue">Cargando...</p>
+          {:else if instalaciones === null}
+            <p class="tenue">Sin información para esta estación.</p>
+          {:else}
+            <ul class="servicios">
+              <li class:no={!instalaciones.ascensor}>Ascensor</li>
+              <li class:no={!instalaciones.rampa}>Rampa</li>
+              <li class:no={!instalaciones.banos}>Baños</li>
+              <li class:no={!instalaciones.wifi}>Wifi</li>
+              <li class:no={!instalaciones.terminal_sube}>Carga SUBE</li>
+            </ul>
+            <dl class="fichas">
+              {#if instalaciones.boleteria}<dt>Boletería</dt><dd>{instalaciones.boleteria}</dd>{/if}
+              {#if instalaciones.direccion}<dt>Dirección</dt><dd>{instalaciones.direccion}</dd>{/if}
+              {#if instalaciones.conexiones}<dt>Conexiones</dt><dd>{instalaciones.conexiones}</dd>{/if}
+              {#if instalaciones.colectivos}<dt>Colectivos</dt><dd>{instalaciones.colectivos}</dd>{/if}
+            </dl>
+          {/if}
+        </div>
       {/if}
     </section>
   {/if}
@@ -343,215 +383,341 @@
 
 <style>
   :global(:root) {
-    --fondo: #f6f7f9;
-    --superficie: #ffffff;
-    --texto: #1d2733;
-    --texto-suave: #5d6b7a;
-    --borde: #dde2e8;
-    --acento: #2f6db5;
-    --normal: #80c395;
-    --cancelado: #e45255;
-    --neutro: #435a6c;
-    --aviso: #f7a83a;
     color-scheme: light dark;
-    font-family: "Segoe UI", system-ui, sans-serif;
+    /* Fuente del sistema de Windows: la app se siente nativa y no carga fuentes. */
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     font-size: 15px;
+    --fondo: #f3f4f6;
+    --superficie: #fdfdfe;
+    --texto: #17191e;
+    --texto-suave: #5e6573;
+    --borde: #e2e5ea;
+    --acento: #1f5fd1;
+    /* Situación del Arribo: colores semánticos, no decorativos. */
+    --en_anden: #13803f;
+    --en_camino: #0e7490;
+    --demorado: #b45309;
+    --cancelado: #c0263f;
+    --programado: #5e6573;
+    --desconocido: #64708a;
   }
   @media (prefers-color-scheme: dark) {
     :global(:root) {
-      --fondo: #14181d;
-      --superficie: #1d232a;
-      --texto: #e7ecf1;
-      --texto-suave: #9aa8b6;
-      --borde: #2e3740;
-      --acento: #6aa3e6;
-      --neutro: #8a9bab;
+      --fondo: #0e1014;
+      --superficie: #161a20;
+      --texto: #eceef2;
+      --texto-suave: #959cab;
+      --borde: #262b34;
+      --acento: #79a7ff;
+      --en_anden: #34d17a;
+      --en_camino: #38bdd8;
+      --demorado: #fbb13c;
+      --cancelado: #fb6f84;
+      --programado: #9aa1ae;
+      --desconocido: #a3adc2;
     }
+  }
+  :global(.sit-en_anden),
+  :global(.sit-arribando) {
+    --sit: var(--en_anden);
+  }
+  :global(.sit-en_camino) {
+    --sit: var(--en_camino);
+  }
+  :global(.sit-demorado) {
+    --sit: var(--demorado);
+  }
+  :global(.sit-cancelado) {
+    --sit: var(--cancelado);
+  }
+  :global(.sit-programado) {
+    --sit: var(--programado);
+  }
+  :global(.sit-desconocido) {
+    --sit: var(--desconocido);
   }
   :global(body) {
     margin: 0;
     background: var(--fondo);
     color: var(--texto);
+    -webkit-font-smoothing: antialiased;
   }
+  :global(:focus-visible) {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
+  }
+
   main {
-    padding: 12px 14px 20px;
-    display: flex;
-    flex-direction: column;
+    padding: 14px 14px 24px;
+    display: grid;
     gap: 12px;
   }
-  header h1 {
+  .barra h1 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.15rem;
+    letter-spacing: -0.01em;
   }
-  h2 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-  section {
+  .panel {
     background: var(--superficie);
     border: 1px solid var(--borde);
-    border-radius: 10px;
-    padding: 10px 12px;
+    border-radius: 14px;
+    padding: 12px;
   }
+
   .favoritos {
     display: flex;
-    flex-wrap: wrap;
     gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
     border: 1px solid var(--borde);
     background: var(--superficie);
     color: var(--texto);
     border-radius: 999px;
-    padding: 4px 10px;
+    padding: 5px 11px;
     cursor: pointer;
     font: inherit;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    transition:
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.15s ease;
+  }
+  .chip :global(svg) {
+    color: var(--demorado);
+  }
+  .chip:hover {
+    border-color: var(--acento);
+  }
+  .chip:active {
+    transform: scale(0.97);
   }
   .chip.activo {
     border-color: var(--acento);
     color: var(--acento);
   }
+
   .selector {
     display: grid;
+    gap: 10px;
+  }
+  .par {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
   label {
     display: grid;
-    gap: 2px;
-    font-size: 0.8rem;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
     color: var(--texto-suave);
+    min-width: 0;
   }
   label.check {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
+    font-weight: 500;
   }
   select {
     font: inherit;
-    padding: 5px 6px;
-    border-radius: 6px;
+    font-size: 0.9rem;
+    padding: 7px 8px;
+    border-radius: 8px;
     border: 1px solid var(--borde);
     background: var(--fondo);
     color: var(--texto);
+    min-width: 0;
+  }
+  select:disabled {
+    opacity: 0.55;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--acento);
+  }
+
+  .estacion {
+    display: grid;
+    gap: 10px;
   }
   .titulo {
     display: flex;
     justify-content: space-between;
-    align-items: start;
+    align-items: flex-start;
+    padding: 2px 2px 0;
   }
-  .sub,
-  .pie,
-  .vacio {
+  h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+  }
+  .sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
     margin: 2px 0 0;
     font-size: 0.8rem;
     color: var(--texto-suave);
   }
+  .sello {
+    font-variant-numeric: tabular-nums;
+  }
   .acciones {
     display: flex;
-    gap: 4px;
+    gap: 2px;
   }
   button.icono {
-    font-size: 1.2rem;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     background: none;
     border: none;
-    color: var(--acento);
+    color: var(--texto-suave);
     cursor: pointer;
-    padding: 2px 6px;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.15s ease;
+  }
+  button.icono:hover {
+    background: var(--borde);
+    color: var(--texto);
+  }
+  button.icono:active {
+    transform: scale(0.94);
   }
   button.icono:disabled {
-    opacity: 0.4;
+    cursor: default;
   }
-  button.link {
+  button.icono.marcado {
+    color: var(--demorado);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button.girando :global(svg) {
+      animation: girar 0.9s linear infinite;
+    }
+  }
+  @keyframes girar {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .aviso {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: var(--demorado);
+    background: color-mix(in srgb, var(--demorado) 13%, transparent);
+  }
+  .aviso span {
+    color: var(--texto);
+  }
+  .aviso.error {
+    color: var(--cancelado);
+    background: color-mix(in srgb, var(--cancelado) 13%, transparent);
+  }
+  .aviso :global(svg) {
+    flex-shrink: 0;
+  }
+  button.enlace {
+    margin-left: auto;
     background: none;
     border: none;
+    padding: 0;
     color: var(--acento);
     cursor: pointer;
     font: inherit;
-    padding: 0;
+    font-weight: 600;
   }
-  .aviso {
-    margin: 8px 0 0;
-    padding: 6px 8px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    border-left: 4px solid var(--aviso);
-    background: color-mix(in srgb, var(--aviso) 15%, transparent);
-  }
-  .aviso.error {
-    border-left-color: var(--cancelado);
-    background: color-mix(in srgb, var(--cancelado) 15%, transparent);
-  }
-  ul {
-    list-style: none;
-    margin: 8px 0 0;
-    padding: 0;
-  }
-  .arribo {
+
+  .vacio {
     display: grid;
-    grid-template-columns: 4.5rem 1fr auto;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 0;
-    border-top: 1px solid var(--borde);
+    gap: 4px;
+    padding: 22px 16px;
+    text-align: center;
+    border: 1px dashed var(--borde);
+    border-radius: 14px;
   }
-  .cuenta {
-    font-size: 1.05rem;
-    font-weight: 600;
-  }
-  .destino {
-    font-weight: 600;
-  }
-  .tachado {
-    text-decoration: line-through;
-  }
-  .meta {
-    font-size: 0.8rem;
+  .vacio span {
+    font-size: 0.85rem;
     color: var(--texto-suave);
   }
-  .demora {
-    color: var(--aviso);
+
+  .instalaciones {
+    padding: 4px 12px;
+  }
+  .desplegar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    color: var(--texto);
+    font: inherit;
     font-weight: 600;
+    cursor: pointer;
   }
-  .estado {
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 999px;
-    color: #fff;
-    white-space: nowrap;
+  .caret {
+    display: grid;
+    color: var(--texto-suave);
+    transition: transform 0.2s ease;
   }
-  .normal .estado {
-    background: var(--normal);
-    color: #12301c;
+  .caret.abierto {
+    transform: rotate(90deg);
   }
-  .cancelado .estado {
-    background: var(--cancelado);
-  }
-  .cancelado .destino,
-  .cancelado .cuenta {
-    color: var(--cancelado);
-  }
-  .neutro .estado {
-    background: var(--neutro);
-  }
-  .instalaciones p {
-    margin: 6px 0 0;
+  .tenue {
+    margin: 0 0 10px;
     font-size: 0.85rem;
+    color: var(--texto-suave);
   }
-  .instalaciones-lista {
+  .servicios {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
   }
-  .instalaciones-lista li {
-    font-size: 0.8rem;
-    padding: 2px 8px;
+  .servicios li {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 3px 10px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--normal) 25%, transparent);
+    color: var(--en_anden);
+    background: color-mix(in srgb, var(--en_anden) 14%, transparent);
   }
-  .instalaciones-lista li.no {
-    background: none;
-    text-decoration: line-through;
+  .servicios li.no {
     color: var(--texto-suave);
+    background: none;
+    border: 1px solid var(--borde);
+    text-decoration: line-through;
+  }
+  .fichas {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    margin: 0 0 12px;
+    font-size: 0.83rem;
+  }
+  .fichas dt {
+    color: var(--texto-suave);
+  }
+  .fichas dd {
+    margin: 0;
   }
 </style>

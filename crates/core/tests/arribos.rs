@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use opentrains_core::casos_de_uso::ConsultaArribos;
 use opentrains_core::dominio::{
-    Arribo, EstacionId, EstadoServicio, Favorito, Ramal, RamalId, Servicio, Tono,
+    Arribo, EstacionId, EstadoServicio, Favorito, Ramal, RamalId, Servicio, Situacion,
 };
 use opentrains_core::puertos::{ArribosSource, SourceError};
 use std::cell::RefCell;
@@ -116,19 +116,43 @@ fn sin_horario_estimado_o_con_menos_de_un_minuto_no_hay_demora() {
     assert_eq!(a.demora_minutos(), None);
 }
 
-#[test]
-fn el_tono_distingue_cancelados_y_estados_no_catalogados() {
-    let normal = arribo(1, "2026-10-13T10:10:00Z");
-    assert_eq!(normal.tono(), Tono::Normal);
-
-    let mut cancelado = arribo(2, "2026-10-13T10:10:00Z");
-    cancelado.servicio.cancelado = true;
-    assert_eq!(cancelado.tono(), Tono::Cancelado);
-
-    let mut raro = arribo(3, "2026-10-13T10:10:00Z");
-    raro.servicio.estado = EstadoServicio {
-        id: 77,
-        nombre: "Demorado".into(),
+fn con_estado(id: u32, nombre: &str) -> Arribo {
+    let mut a = arribo(1, "2026-10-13T10:10:00Z");
+    a.servicio.estado = EstadoServicio {
+        id,
+        nombre: nombre.into(),
     };
-    assert_eq!(raro.tono(), Tono::Neutro);
+    a
+}
+
+#[test]
+fn la_situacion_refleja_el_estado_del_servicio() {
+    assert_eq!(con_estado(10, "Programado").situacion(), Situacion::Programado);
+    assert_eq!(con_estado(25, "En Andén").situacion(), Situacion::EnAnden);
+    assert_eq!(con_estado(35, "Partió").situacion(), Situacion::EnCamino);
+    assert_eq!(con_estado(77, "Confirmado").situacion(), Situacion::Desconocido);
+}
+
+#[test]
+fn una_demora_pesa_mas_que_estar_en_camino_o_programado() {
+    for (id, nombre) in [(10, "Programado"), (35, "Partió"), (77, "Confirmado")] {
+        let mut a = con_estado(id, nombre);
+        a.estimada = Some(t("2026-10-13T10:14:00Z"));
+        assert_eq!(a.situacion(), Situacion::Demorado, "estado {nombre}");
+    }
+}
+
+#[test]
+fn estar_en_anden_pesa_mas_que_la_demora() {
+    let mut a = con_estado(25, "En Andén");
+    a.estimada = Some(t("2026-10-13T10:14:00Z"));
+    assert_eq!(a.situacion(), Situacion::EnAnden);
+}
+
+#[test]
+fn la_cancelacion_pesa_mas_que_todo() {
+    let mut a = con_estado(25, "En Andén");
+    a.estimada = Some(t("2026-10-13T10:14:00Z"));
+    a.servicio.cancelado = true;
+    assert_eq!(a.situacion(), Situacion::Cancelado);
 }

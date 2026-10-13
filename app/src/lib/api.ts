@@ -16,15 +16,21 @@ export interface Preferencias {
   ultimo_abierto: Favorito | null;
 }
 
-export type Tono = "normal" | "cancelado" | "neutro";
+export type Situacion =
+  | "cancelado"
+  | "en_anden"
+  | "demorado"
+  | "en_camino"
+  | "programado"
+  | "desconocido";
 
 export interface Arribo {
   numero: number;
-  ramal: string;
+  ramal: Ramal;
   destino: string;
+  /** Texto del Estado del Servicio tal como lo informa el operador. */
   estado: string;
-  tono: Tono;
-  cancelado: boolean;
+  situacion: Situacion;
   formacion: string | null;
   anden: string | null;
   programada: string;

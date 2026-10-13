@@ -48,6 +48,10 @@ _Avoid_: Llegada (es solo uno de sus horarios), parada
 Situación operativa actual de un Servicio según el operador (ej. Programado, En Andén, Partió); puede ser un estado aún no catalogado.
 _Avoid_: Status
 
+**Situación del Arribo**:
+Lo que el pasajero necesita saber de un Arribo de un vistazo: cancelado, en andén, demorado, en camino, programado o sin catalogar. Se deriva del Estado del Servicio, la demora y la cancelación, en ese orden de prioridad.
+_Avoid_: Tono, status
+
 **Servicio cancelado**:
 Servicio que el operador marcó con una cancelación; se sigue mostrando, señalado como tal.
 

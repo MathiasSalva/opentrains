@@ -41,14 +41,18 @@ pub struct EstadoServicio {
     pub nombre: String,
 }
 
-/// Cómo debe presentarse un Arribo según su Estado y si fue cancelado.
+/// Situación de un Arribo para el pasajero, derivada del Estado del Servicio, la
+/// demora y la cancelación.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Tono {
-    Normal,
+pub enum Situacion {
     Cancelado,
+    EnAnden,
+    Demorado,
+    EnCamino,
+    Programado,
     /// Estado aún no catalogado.
-    Neutro,
+    Desconocido,
 }
 
 impl EstadoServicio {
@@ -56,9 +60,6 @@ impl EstadoServicio {
     pub const EN_ANDEN: u32 = 25;
     pub const PARTIO: u32 = 35;
 
-    fn es_conocido(&self) -> bool {
-        matches!(self.id, Self::PROGRAMADO | Self::EN_ANDEN | Self::PARTIO)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,13 +90,21 @@ impl Arribo {
         (minutos >= 1).then_some(minutos)
     }
 
-    pub fn tono(&self) -> Tono {
+    /// Prioridad: cancelado > en andén > demorado > estado informado.
+    pub fn situacion(&self) -> Situacion {
         if self.servicio.cancelado {
-            Tono::Cancelado
-        } else if self.servicio.estado.es_conocido() {
-            Tono::Normal
-        } else {
-            Tono::Neutro
+            return Situacion::Cancelado;
+        }
+        if self.servicio.estado.id == EstadoServicio::EN_ANDEN {
+            return Situacion::EnAnden;
+        }
+        if self.demora_minutos().is_some() {
+            return Situacion::Demorado;
+        }
+        match self.servicio.estado.id {
+            EstadoServicio::PARTIO => Situacion::EnCamino,
+            EstadoServicio::PROGRAMADO => Situacion::Programado,
+            _ => Situacion::Desconocido,
         }
     }
 }

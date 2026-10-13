@@ -22,3 +22,10 @@ export function hace(desde: number, ahora: number): string {
   if (segundos < 60) return `${segundos} s`;
   return `${Math.floor(segundos / 60)} min`;
 }
+
+/** Cuenta regresiva separada en valor y unidad, para mostrarla en grande. */
+export function partesCuenta(segundos: number): { valor: string; unidad: string } {
+  if (segundos <= 0) return { valor: "Ahora", unidad: "" };
+  if (segundos < 60) return { valor: "< 1", unidad: "min" };
+  return { valor: String(Math.floor(segundos / 60)), unidad: "min" };
+}

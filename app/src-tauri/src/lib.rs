@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use opentrains_core::casos_de_uso::{Catalogo, ConsultaArribos, Favoritos};
 use opentrains_core::dominio::{
     Arribo, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId, Preferencias, Ramal,
-    RamalId, Tono,
+    RamalId, Situacion,
 };
 use opentrains_core::puertos::{InstalacionesSource, SourceError, StorageError, SystemClock};
 use opentrains_sofse::SofseClient;
@@ -47,11 +47,11 @@ impl From<StorageError> for AppError {
 #[derive(Serialize)]
 struct ArriboVista {
     numero: u32,
-    ramal: String,
+    ramal: Ramal,
     destino: String,
+    /// Texto del Estado del Servicio tal como lo informa el operador.
     estado: String,
-    tono: Tono,
-    cancelado: bool,
+    situacion: Situacion,
     formacion: Option<String>,
     anden: Option<String>,
     programada: DateTime<Utc>,
@@ -63,12 +63,11 @@ impl From<Arribo> for ArriboVista {
     fn from(a: Arribo) -> Self {
         Self {
             demora_minutos: a.demora_minutos(),
-            tono: a.tono(),
+            situacion: a.situacion(),
             numero: a.servicio.numero,
-            ramal: a.servicio.ramal.nombre,
+            ramal: a.servicio.ramal,
             destino: a.servicio.destino,
             estado: a.servicio.estado.nombre,
-            cancelado: a.servicio.cancelado,
             formacion: a.servicio.formacion,
             anden: a.anden,
             programada: a.programada,
