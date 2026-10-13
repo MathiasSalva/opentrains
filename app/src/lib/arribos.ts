@@ -1,5 +1,6 @@
 // Presentación de una lista de Arribos: el próximo destacado y el resto agrupado por Ramal.
 import type { Arribo, Ramal, Situacion } from "./api";
+import { hora } from "./formato";
 
 export interface GrupoRamal {
   ramal: Ramal;
@@ -64,4 +65,13 @@ export type ClaseSituacion = Situacion | "arribando";
 export function claseSituacion(arribo: Arribo, ahora: number): ClaseSituacion {
   if (arribo.situacion !== "en_anden" && estaArribando(arribo, ahora)) return "arribando";
   return arribo.situacion;
+}
+
+/** Texto del ícono de la bandeja: el próximo tren con hora absoluta, que no envejece. */
+export function textoBandeja(estacion: string, arribos: Arribo[]): string {
+  const siguiente = proximo(arribos);
+  if (!siguiente) return `${estacion}: sin próximos trenes`;
+  const demora = siguiente.demora_minutos === null ? "" : ` (+${siguiente.demora_minutos} min)`;
+  const anden = siguiente.anden ? `, andén ${siguiente.anden}` : "";
+  return `${estacion}: ${hora(siguiente.programada)}${demora} a ${siguiente.destino}${anden}`;
 }

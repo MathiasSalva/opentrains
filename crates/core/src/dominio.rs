@@ -59,7 +59,6 @@ impl EstadoServicio {
     pub const PROGRAMADO: u32 = 10;
     pub const EN_ANDEN: u32 = 25;
     pub const PARTIO: u32 = 35;
-
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

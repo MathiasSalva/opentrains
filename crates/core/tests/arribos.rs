@@ -127,10 +127,16 @@ fn con_estado(id: u32, nombre: &str) -> Arribo {
 
 #[test]
 fn la_situacion_refleja_el_estado_del_servicio() {
-    assert_eq!(con_estado(10, "Programado").situacion(), Situacion::Programado);
+    assert_eq!(
+        con_estado(10, "Programado").situacion(),
+        Situacion::Programado
+    );
     assert_eq!(con_estado(25, "En Andén").situacion(), Situacion::EnAnden);
     assert_eq!(con_estado(35, "Partió").situacion(), Situacion::EnCamino);
-    assert_eq!(con_estado(77, "Confirmado").situacion(), Situacion::Desconocido);
+    assert_eq!(
+        con_estado(77, "Confirmado").situacion(),
+        Situacion::Desconocido
+    );
 }
 
 #[test]

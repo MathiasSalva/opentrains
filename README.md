@@ -22,11 +22,21 @@ cd app && npm install
 npm run tauri dev
 ```
 
-Ejecutable de release, sin instalador (queda en `target/release/opentrains-app.exe`):
+Instalador para Windows (NSIS, por usuario, sin permisos de administrador). Crea el acceso
+en el menú Inicio y queda en `target/release/bundle/nsis/`:
+
+```bash
+npm run tauri build
+```
+
+Ejecutable suelto sin instalador (`target/release/opentrains-app.exe`):
 
 ```bash
 npm run tauri build -- --no-bundle
 ```
+
+La app vive en la bandeja del sistema: clic en el ícono abre el panel, clic derecho muestra
+el menú (abrir, iniciar con Windows, salir). Ver [ADR-0003](docs/adr/0003-widget-de-bandeja.md).
 
 ## Desarrollo
 

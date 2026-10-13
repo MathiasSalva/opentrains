@@ -85,6 +85,7 @@ export const api = {
   agregarFavorito: (favorito: Favorito) => invoke<Preferencias>("agregar_favorito", { favorito }),
   quitarFavorito: (favorito: Favorito) => invoke<Preferencias>("quitar_favorito", { favorito }),
   abrir: (favorito: Favorito) => invoke<Preferencias>("abrir", { favorito }),
+  actualizarBandeja: (texto: string) => invoke<void>("actualizar_bandeja", { texto }),
 };
 
 export function mismoFavorito(a: Favorito, b: Favorito): boolean {

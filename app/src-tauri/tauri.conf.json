@@ -12,11 +12,16 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "OpenTrains",
-        "width": 420,
-        "height": 700,
-        "minWidth": 360,
-        "minHeight": 480
+        "width": 400,
+        "height": 640,
+        "resizable": false,
+        "decorations": false,
+        "shadow": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
       }
     ],
     "security": {
@@ -25,13 +30,26 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Trenes de Argentina en vivo",
+    "category": "Travel",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": [
+          "Spanish"
+        ]
+      }
+    }
   }
 }

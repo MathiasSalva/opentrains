@@ -1,6 +1,9 @@
 //! Adaptador de entrada y punto de composición: conecta los casos de uso de `core`
 //! con los adaptadores de SOFSE y de almacenamiento, y los expone como comandos Tauri.
 
+#[cfg(desktop)]
+mod bandeja;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -131,6 +134,15 @@ fn abrir(app: State<'_, AppState>, favorito: Favorito) -> Result<Preferencias, A
     Ok(app.favoritos.abrir(favorito)?)
 }
 
+/// Texto del ícono de la bandeja con el próximo tren; lo arma el frontend en cada refresco.
+#[tauri::command]
+fn actualizar_bandeja(app: tauri::AppHandle, texto: String) {
+    #[cfg(desktop)]
+    bandeja::tooltip(&app, &texto);
+    #[cfg(not(desktop))]
+    let _ = (app, texto);
+}
+
 /// `%APPDATA%\OpenTrains` en Windows; el directorio de datos de la app en otras plataformas.
 fn directorio_datos(app: &tauri::App) -> PathBuf {
     #[cfg(windows)]
@@ -144,7 +156,21 @@ fn directorio_datos(app: &tauri::App) -> PathBuf {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder
+        // Abrir la app de nuevo (por ejemplo desde el menú Inicio) muestra el panel de la
+        // instancia que ya corre en la bandeja.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            bandeja::mostrar(app)
+        }))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .args([bandeja::ARG_OCULTA])
+                .build(),
+        )
+        .manage(bandeja::EstadoPanel::default());
+    builder
         .setup(|app| {
             let sofse = Arc::new(SofseClient::default());
             let store = Arc::new(JsonStore::new(directorio_datos(app)));
@@ -154,6 +180,17 @@ pub fn run() {
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),
             });
+            #[cfg(desktop)]
+            {
+                bandeja::crear(app.handle())?;
+                if let Some(ventana) = app.get_webview_window("main") {
+                    bandeja::comportamiento_panel(&ventana);
+                }
+                // Al iniciar con Windows arranca oculta; abierta a mano, muestra el panel.
+                if !std::env::args().any(|a| a == bandeja::ARG_OCULTA) {
+                    bandeja::mostrar(app.handle());
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -165,7 +202,8 @@ pub fn run() {
             preferencias,
             agregar_favorito,
             quitar_favorito,
-            abrir
+            abrir,
+            actualizar_bandeja
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar OpenTrains");

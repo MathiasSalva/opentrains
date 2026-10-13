@@ -20,7 +20,7 @@
   import CaretRightIcon from "phosphor-svelte/lib/CaretRightIcon";
   import WarningIcon from "phosphor-svelte/lib/WarningIcon";
   import WifiSlashIcon from "phosphor-svelte/lib/WifiSlashIcon";
-  import { agruparPorRamal, clave, proximo } from "$lib/arribos";
+  import { agruparPorRamal, clave, proximo, textoBandeja } from "$lib/arribos";
   import { hace } from "$lib/formato";
   import { duracion, EASE } from "$lib/movimiento";
   import ProximoArribo from "$lib/components/ProximoArribo.svelte";
@@ -138,10 +138,12 @@
       ultimaActualizacion = Date.now();
       errorArribos = null;
       fuenteCambiada = false;
+      api.actualizarBandeja(textoBandeja(actual.estacion_nombre, nuevos)).catch(() => {});
     } catch (e) {
       if (consulta !== ultimaConsulta) return;
       errorArribos = describirError(e);
       fuenteCambiada = esFuenteCambiada(e);
+      api.actualizarBandeja(`${actual?.estacion_nombre ?? "OpenTrains"}: sin datos`).catch(() => {});
     } finally {
       if (consulta === ultimaConsulta) cargando = false;
     }
@@ -184,25 +186,24 @@
       if (preferencias.ultimo_abierto) await abrir(preferencias.ultimo_abierto);
     })();
 
-    // Refresco cada 45 s y cuenta regresiva cada 1 s, solo con la ventana visible.
-    // WebView2 no siempre marca el documento como oculto al minimizar, así que también
-    // se consulta el estado de la ventana.
+    // Refresco cada 45 s también con el panel oculto: así el ícono de la bandeja muestra
+    // siempre el próximo tren. Con la ventana oculta, WebView2 puede espaciar los timers
+    // hasta 1 por minuto; al volver a mostrarse se refresca si los datos quedaron viejos.
     const ventana = getCurrentWindow();
-    const visible = async () =>
-      document.visibilityState === "visible" && !(await ventana.isMinimized());
-    const refresco = setInterval(async () => (await visible()) && refrescar(), REFRESCO_MS);
+    const refresco = setInterval(refrescar, REFRESCO_MS);
     const reloj = setInterval(() => (ahora = Date.now()), 1_000);
-    const alVolver = async () => {
-      if (!(await visible())) return;
+    const alMostrarse = () => {
       ahora = Date.now();
       if (ultimaActualizacion === null || ahora - ultimaActualizacion >= REFRESCO_MS) refrescar();
     };
-    document.addEventListener("visibilitychange", alVolver);
-    const dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alVolver());
+    const dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alMostrarse());
+    // Como los paneles de Windows: Escape lo oculta.
+    const alTeclear = (e: KeyboardEvent) => e.key === "Escape" && ventana.hide();
+    document.addEventListener("keydown", alTeclear);
     return () => {
       clearInterval(refresco);
       clearInterval(reloj);
-      document.removeEventListener("visibilitychange", alVolver);
+      document.removeEventListener("keydown", alTeclear);
       dejarDeEscuchar.then((fn) => fn());
     };
   });
