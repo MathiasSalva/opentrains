@@ -10,3 +10,8 @@ dist/
 
 # Herramientas locales
 .claude/settings.local.json
+
+# Tauri
+/app/build/
+/app/.svelte-kit/
+/app/src-tauri/gen/

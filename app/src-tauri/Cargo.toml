@@ -1,0 +1,22 @@
+[package]
+name = "opentrains-app"
+description = "OpenTrains: trenes de Argentina en vivo"
+edition.workspace = true
+version.workspace = true
+
+[lib]
+# El sufijo `_lib` evita un choque de nombres con el binario en Windows
+# (https://github.com/rust-lang/cargo/issues/8519).
+name = "opentrains_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+opentrains-core = { path = "../../crates/core" }
+opentrains-sofse = { path = "../../crates/sofse" }
+opentrains-storage = { path = "../../crates/storage" }
+chrono.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }

@@ -92,3 +92,49 @@ impl Reloj for RelojSistema {
         Utc::now()
     }
 }
+
+// Los adaptadores se comparten entre casos de uso a través de `Arc`.
+
+impl<T: CatalogoSource> CatalogoSource for std::sync::Arc<T> {
+    async fn lineas(&self) -> Result<Vec<Linea>, SourceError> {
+        (**self).lineas().await
+    }
+    async fn ramales(&self, linea: LineaId) -> Result<Vec<Ramal>, SourceError> {
+        (**self).ramales(linea).await
+    }
+    async fn estaciones(&self, ramal: RamalId) -> Result<Vec<Estacion>, SourceError> {
+        (**self).estaciones(ramal).await
+    }
+}
+
+impl<T: ArribosSource> ArribosSource for std::sync::Arc<T> {
+    async fn arribos(
+        &self,
+        estacion: EstacionId,
+        ramal: Option<RamalId>,
+    ) -> Result<Vec<Arribo>, SourceError> {
+        (**self).arribos(estacion, ramal).await
+    }
+}
+
+impl<T: CatalogoCache> CatalogoCache for std::sync::Arc<T> {
+    fn leer(&self, clave: &ClaveCatalogo) -> Result<Option<EntradaCatalogo>, StorageError> {
+        (**self).leer(clave)
+    }
+    fn guardar(
+        &self,
+        clave: &ClaveCatalogo,
+        entrada: &EntradaCatalogo,
+    ) -> Result<(), StorageError> {
+        (**self).guardar(clave, entrada)
+    }
+}
+
+impl<T: PreferenciasRepo> PreferenciasRepo for std::sync::Arc<T> {
+    fn cargar(&self) -> Result<Preferencias, StorageError> {
+        (**self).cargar()
+    }
+    fn guardar(&self, preferencias: &Preferencias) -> Result<(), StorageError> {
+        (**self).guardar(preferencias)
+    }
+}
