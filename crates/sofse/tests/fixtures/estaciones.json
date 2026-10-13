@@ -1,0 +1,8 @@
+[
+  {"nombre": "Palermo", "id_estacion": "297", "id_tramo": "8", "orden": "2", "id_referencia": "188077",
+   "latitud": "-34.5781", "longitud": "-58.4278", "referencia_orden": "5", "radio": "", "andenes_habilitados": "2",
+   "visibilidad": {"totem": 1, "app_mobile": 1}, "incluida_en_ramales": [31, 65, 131], "operativa_en_ramales": [31, 65, 131]},
+  {"nombre": "Retiro (LSM)", "id_estacion": "463", "id_tramo": "8", "orden": "1", "id_referencia": "188076",
+   "latitud": "-34.5888579", "longitud": "-58.3741843", "referencia_orden": "4", "radio": "", "andenes_habilitados": "5",
+   "visibilidad": {"totem": 1, "app_mobile": 1}, "incluida_en_ramales": [31, 65, 131], "operativa_en_ramales": [31, 65, 131]}
+]

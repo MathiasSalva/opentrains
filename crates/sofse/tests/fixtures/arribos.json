@@ -1,0 +1,80 @@
+{
+  "timestamp": 1791852480,
+  "results": [
+    {
+      "arribo": {
+        "anden": {"id": 1003, "nombre": "3"},
+        "orden": 0,
+        "equipo": {"id": 70, "nombre": "B953", "esElectrico": 0, "gpss": ["30007", "30006"]},
+        "nombre": "Retiro - LSM",
+        "parada": true,
+        "salida": {"programada": "2026-10-13T00:48:00.000Z", "enAnden": "DENTRO DEL ANDEN dist: 179",
+                   "ultimaHoraRegistrada": "2026-10-13T00:47:22.000Z", "distancia": 179, "velocidad": 2,
+                   "latitud": -34.5877664, "longitud": -58.3764406, "referencia": 188088},
+        "llegada": {},
+        "idElemento": 463,
+        "segundos": 0,
+        "programada": true
+      },
+      "servicio": {
+        "numero": 3907,
+        "ramal": {"id": 65, "nombre": "Retiro-Cabred", "tolerancia": 359,
+                  "cabeceraFinal": {"id": 51, "nombre": "Dr. Cabred", "nombreCorto": "Cabred"},
+                  "cabeceraInicial": {"id": 463, "nombre": "Retiro (LSM)", "nombreCorto": "Retiro - LSM"}},
+        "gerencia": {"id": 31, "nombre": "San Martín"},
+        "cancelacion": null,
+        "equipo": {"id": 70, "nombre": "B953", "esElectrico": 0, "gpss": ["30007", "30006"]},
+        "oculto": false,
+        "sentido": 1,
+        "tipo": {"id": 1, "nombre": "Normal", "clasificacion": {"id": 1, "nombre": "Pasajeros"}},
+        "location": {"lat": -34.58773, "long": -58.37631},
+        "id": "b393572c-0000-0000-0000-000000000000",
+        "desde": {"estacion": {}, "punto": {}, "estado": {"id": 25, "nombre": "En Andén"}},
+        "hasta": {"estacion": {"nombre": "Pilar", "orden": 63, "idElemento": 306}}
+      }
+    },
+    {
+      "arribo": {
+        "anden": {"id": 1002, "nombre": "2"},
+        "orden": 2,
+        "equipo": {"id": 71, "nombre": "B965", "esElectrico": 0, "gpss": []},
+        "nombre": "Palermo",
+        "parada": true,
+        "salida": {"programada": "2026-10-13T01:05:00.000Z", "estimada": "2026-10-13T01:09:00.000Z"},
+        "llegada": {"programada": "2026-10-13T01:04:00.000Z", "estimada": "2026-10-13T01:08:30.000Z"},
+        "idElemento": 297,
+        "segundos": 1230,
+        "programada": true
+      },
+      "servicio": {
+        "numero": 3904,
+        "ramal": {"id": 65, "nombre": "Retiro-Cabred"},
+        "gerencia": {"id": 31, "nombre": "San Martín"},
+        "cancelacion": {"motivo": "Falta de personal"},
+        "equipo": {"id": 71, "nombre": "B965", "esElectrico": 0, "gpss": []},
+        "oculto": false,
+        "sentido": 2,
+        "location": null,
+        "desde": {"estado": {"id": 35, "nombre": "Partió"}},
+        "hasta": {"estacion": {"nombre": "Retiro (LSM)", "orden": 83, "idElemento": 463}}
+      }
+    },
+    {
+      "arribo": {
+        "anden": null,
+        "llegada": {"programada": "2026-10-13T01:20:00.000Z"},
+        "salida": {"programada": "2026-10-13T01:21:00.000Z"},
+        "segundos": 1200
+      },
+      "servicio": {
+        "numero": 9999,
+        "ramal": {"id": 131, "nombre": "Retiro-Junín"},
+        "cancelacion": null,
+        "equipo": null,
+        "oculto": true,
+        "desde": {"estado": {"id": 10, "nombre": "Programado"}},
+        "hasta": {"estacion": {"nombre": "Junín"}}
+      }
+    }
+  ]
+}

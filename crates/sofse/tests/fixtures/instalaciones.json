@@ -1,0 +1,15 @@
+[
+  {
+    "estacion": "Retiro - San Martín",
+    "direccion": "Av. Dr. José María Ramos Mejía 1500, CABA.",
+    "boleteria": "Lunes a viernes 24h, sábados y domingos de 5 a 21 h",
+    "cap": "Lun. a vie. de 6 a 20 hs.",
+    "banos": "SI", "ascensor": "NO", "rampa": "SI", "wifi": "SI", "etb": "NO",
+    "colectivos": "5 - 6 - 7 - 9",
+    "conexiones": "Subte C - Subte E - Tren Mitre",
+    "relevador": "Marina",
+    "estacion_id_unico": 463,
+    "linea_id": 31,
+    "terminal_sube": "SI"
+  }
+]

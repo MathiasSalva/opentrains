@@ -1,0 +1,5 @@
+[
+  {"id": 1, "id_empresa": 1, "nombre": "Sarmiento", "estado": 1, "alerta": null},
+  {"id": 31, "id_empresa": 1, "nombre": "San Martín", "estado": 1, "alerta": null},
+  {"id": 501, "id_empresa": 1, "nombre": "Regionales", "estado": 1, "alerta": null}
+]
