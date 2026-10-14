@@ -14,4 +14,4 @@ dist/
 # Tauri
 /app/build/
 /app/.svelte-kit/
-/app/src-tauri/gen/
+/app/src-tauri/gen/schemas/
