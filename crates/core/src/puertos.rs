@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::dominio::{
-    Arribo, Aviso, Estacion, EstacionId, Instalaciones, Linea, LineaId, Preferencias, Ramal,
-    RamalId, Seguimiento,
+    Arribo, Aviso, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Preferencias,
+    Ramal, RamalId, Seguimiento,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize)]
@@ -47,6 +47,19 @@ pub trait InstalacionesSource {
         &self,
         estacion: EstacionId,
     ) -> Result<Option<Instalaciones>, SourceError>;
+}
+
+/// Estaciones de cualquier Línea cerca de un punto.
+#[allow(async_fn_in_trait)]
+pub trait EstacionesCercanasSource {
+    async fn estaciones_cercanas(&self, desde: Coordenadas) -> Result<Vec<Estacion>, SourceError>;
+}
+
+/// La Ubicación del dispositivo. `None` si está desactivada, denegada o no hay señal:
+/// para la app es lo mismo, no se muestran distancias.
+#[allow(async_fn_in_trait)]
+pub trait UbicacionSource {
+    async fn ubicacion(&self) -> Option<Coordenadas>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -151,5 +164,17 @@ impl<T: InstalacionesSource> InstalacionesSource for std::sync::Arc<T> {
         estacion: EstacionId,
     ) -> Result<Option<Instalaciones>, SourceError> {
         (**self).instalaciones(estacion).await
+    }
+}
+
+impl<T: EstacionesCercanasSource> EstacionesCercanasSource for std::sync::Arc<T> {
+    async fn estaciones_cercanas(&self, desde: Coordenadas) -> Result<Vec<Estacion>, SourceError> {
+        (**self).estaciones_cercanas(desde).await
+    }
+}
+
+impl<T: UbicacionSource> UbicacionSource for std::sync::Arc<T> {
+    async fn ubicacion(&self) -> Option<Coordenadas> {
+        (**self).ubicacion().await
     }
 }

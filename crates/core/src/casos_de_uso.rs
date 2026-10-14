@@ -6,13 +6,16 @@ use std::sync::Mutex;
 
 use chrono::Duration;
 
+use serde::Serialize;
+
 use crate::dominio::{
-    Arribo, Estacion, EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId,
-    Seguimiento,
+    Arribo, Coordenadas, Distancia, Estacion, EstacionId, Favorito, Linea, LineaId, Preferencias,
+    Ramal, RamalId, Seguimiento,
 };
 use crate::puertos::{
     ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo,
-    EntradaCatalogo, Notificador, PreferenciasRepo, SourceError, StorageError,
+    EntradaCatalogo, EstacionesCercanasSource, Notificador, PreferenciasRepo, SourceError,
+    StorageError, UbicacionSource,
 };
 
 /// Arribos de un Favorito, listos para mostrar.
@@ -155,9 +158,29 @@ impl<P: PreferenciasRepo> Favoritos<P> {
         self.modificar(|p| p.favoritos.retain(|f| !f.mismo_que(favorito)))
     }
 
-    /// Recuerda la Estación (y Ramal) abierta, sea o no un Favorito guardado.
+    /// Recuerda la Estación (y Ramal) abierta, sea o no un Favorito guardado. Si trae
+    /// coordenadas, se las completa a los Favoritos de esa Estación que no las tenían.
     pub fn abrir(&self, favorito: Favorito) -> Result<Preferencias, StorageError> {
-        self.modificar(|p| p.ultimo_abierto = Some(favorito))
+        self.modificar(|p| {
+            if let Some(coordenadas) = favorito.coordenadas {
+                p.favoritos
+                    .iter_mut()
+                    .filter(|f| f.estacion == favorito.estacion && f.coordenadas.is_none())
+                    .for_each(|f| f.coordenadas = Some(coordenadas));
+            }
+            p.ultimo_abierto = Some(favorito);
+        })
+    }
+
+    /// La anticipación elegida al seguir un Servicio pasa a ser la sugerida en esa Estación.
+    pub fn recordar_anticipacion(
+        &self,
+        estacion: EstacionId,
+        minutos: u32,
+    ) -> Result<Preferencias, StorageError> {
+        self.modificar(|p| {
+            p.anticipaciones.insert(estacion, minutos);
+        })
     }
 
     fn modificar(
@@ -168,6 +191,87 @@ impl<P: PreferenciasRepo> Favoritos<P> {
         cambio(&mut preferencias);
         self.repo.guardar(&preferencias)?;
         Ok(preferencias)
+    }
+}
+
+/// Una de las Estaciones cercanas, con su distancia a la Ubicación.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EstacionCercana {
+    pub estacion: Estacion,
+    pub distancia: Distancia,
+}
+
+/// Ubicación del usuario y distancias a las Estaciones. La Ubicación vive en memoria:
+/// se conserva la última conocida y nunca se guarda en disco.
+pub struct Cercania<U, E> {
+    ubicacion: U,
+    source: E,
+    ultima: Mutex<Option<Coordenadas>>,
+    /// Estaciones cercanas y desde dónde se pidieron.
+    cercanas: Mutex<Option<(Coordenadas, Vec<Estacion>)>>,
+}
+
+impl<U: UbicacionSource, E: EstacionesCercanasSource> Cercania<U, E> {
+    pub const CUANTAS: usize = 3;
+    /// Movimiento mínimo para volver a pedir las Estaciones cercanas: menos es ruido
+    /// de la ubicación por Wi-Fi.
+    pub const MOVIMIENTO_METROS: f64 = 300.0;
+
+    pub fn new(ubicacion: U, source: E) -> Self {
+        Self {
+            ubicacion,
+            source,
+            ultima: Mutex::default(),
+            cercanas: Mutex::default(),
+        }
+    }
+
+    /// Consulta la Ubicación; si no hay una nueva, queda la última conocida.
+    pub async fn actualizar(&self) -> Option<Coordenadas> {
+        let nueva = self.ubicacion.ubicacion().await;
+        let mut ultima = self.ultima.lock().unwrap();
+        if nueva.is_some() {
+            *ultima = nueva;
+        }
+        *ultima
+    }
+
+    pub fn distancias(&self, destinos: &[Coordenadas]) -> Option<Vec<Distancia>> {
+        let desde = (*self.ultima.lock().unwrap())?;
+        Some(destinos.iter().map(|d| desde.distancia(d)).collect())
+    }
+
+    /// Las Estaciones más próximas a la Ubicación, de cualquier Línea.
+    pub async fn cercanas(&self) -> Result<Option<Vec<EstacionCercana>>, SourceError> {
+        let Some(desde) = *self.ultima.lock().unwrap() else {
+            return Ok(None);
+        };
+        let vigentes = self
+            .cercanas
+            .lock()
+            .unwrap()
+            .clone()
+            .filter(|(pedidas, _)| pedidas.distancia(&desde).metros < Self::MOVIMIENTO_METROS);
+        let estaciones = match vigentes {
+            Some((_, estaciones)) => estaciones,
+            None => {
+                let estaciones = self.source.estaciones_cercanas(desde).await?;
+                *self.cercanas.lock().unwrap() = Some((desde, estaciones.clone()));
+                estaciones
+            }
+        };
+        let mut vistas = BTreeSet::new();
+        let mut cercanas: Vec<EstacionCercana> = estaciones
+            .into_iter()
+            .filter(|e| vistas.insert(e.id))
+            .map(|estacion| EstacionCercana {
+                distancia: desde.distancia(&estacion.coordenadas()),
+                estacion,
+            })
+            .collect();
+        cercanas.sort_by(|a, b| a.distancia.metros.total_cmp(&b.distancia.metros));
+        cercanas.truncate(Self::CUANTAS);
+        Ok(Some(cercanas))
     }
 }
 

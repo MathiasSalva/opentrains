@@ -68,6 +68,14 @@ _Avoid_: Alarma, suscripción
 Lo que la app le notifica al usuario sobre un Servicio que sigue: que está por pasar (según la anticipación elegida), que tiene demora o que fue cancelado.
 _Avoid_: Alerta, notificación (es el medio, no el concepto)
 
+**Ubicación**:
+Dónde está el usuario ahora, según el dispositivo; se consulta al abrir o refrescar y no se guarda. Las distancias a las Estaciones se miden desde acá, en línea recta.
+_Avoid_: Posición GPS, geolocalización
+
+**Estaciones cercanas**:
+Las Estaciones más próximas a la Ubicación, de cualquier Línea.
+_Avoid_: Cerca tuyo (es el rótulo de la UI)
+
 **Favorito**:
 Una Estación guardada por el usuario, opcionalmente acotada a un Ramal, para ver sus Arribos en un clic.
 _Avoid_: Bookmark, guardado

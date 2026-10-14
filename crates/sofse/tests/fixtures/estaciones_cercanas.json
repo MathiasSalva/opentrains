@@ -1,0 +1,74 @@
+[
+  {
+    "nombre": "Retiro (LGM)",
+    "id_estacion": "332",
+    "id_tramo": "1",
+    "orden": "1",
+    "id_referencia": "3653",
+    "latitud": "-34.5909122",
+    "longitud": "-58.3750538",
+    "referencia_orden": "1",
+    "radio": "",
+    "andenes_habilitados": "8",
+    "visibilidad": {
+      "totem": 1,
+      "app_mobile": 1
+    },
+    "incluida_en_ramales": "[141,151,9,5,7,171]",
+    "operativa_en_ramales": "[141,151,9,5,7,171]"
+  },
+  {
+    "nombre": "Retiro (LSM)",
+    "id_estacion": "463",
+    "id_tramo": "8",
+    "orden": "1",
+    "id_referencia": "188076",
+    "latitud": "-34.5888579",
+    "longitud": "-58.3741843",
+    "referencia_orden": "4",
+    "radio": "",
+    "andenes_habilitados": "5",
+    "visibilidad": {
+      "totem": 1,
+      "app_mobile": 1
+    },
+    "incluida_en_ramales": "[31,65,131]",
+    "operativa_en_ramales": "[31,65,131]"
+  },
+  {
+    "nombre": "Once",
+    "id_estacion": "293",
+    "id_tramo": "87",
+    "orden": "1",
+    "id_referencia": "1",
+    "latitud": "-34.6085914",
+    "longitud": "-58.4075590",
+    "referencia_orden": "1",
+    "radio": "",
+    "andenes_habilitados": "8",
+    "visibilidad": {
+      "totem": 1,
+      "app_mobile": 1
+    },
+    "incluida_en_ramales": "[111,1]",
+    "operativa_en_ramales": "[111,1]"
+  },
+  {
+    "nombre": "Constitución",
+    "id_estacion": "93",
+    "id_tramo": "17",
+    "orden": "1",
+    "id_referencia": "10462",
+    "latitud": "-34.6303512",
+    "longitud": "-58.3805802",
+    "referencia_orden": "10",
+    "radio": "",
+    "andenes_habilitados": "14",
+    "visibilidad": {
+      "totem": 1,
+      "app_mobile": 1
+    },
+    "incluida_en_ramales": "[55,11,13,17,605,601,609,49,103,43,57,19,15,603,181,101,105]",
+    "operativa_en_ramales": "[11,13,17,605,601,609,103,43,19,15,603,181,101]"
+  }
+]

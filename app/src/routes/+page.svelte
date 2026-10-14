@@ -3,11 +3,14 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     api,
+    coordenadas,
     describirError,
     esFuenteCambiada,
     mismoFavorito,
     type Arribo,
+    type Coordenadas,
     type Estacion,
+    type EstacionCercana,
     type Favorito,
     type Instalaciones,
     type Linea,
@@ -20,6 +23,7 @@
   import CaretRightIcon from "phosphor-svelte/lib/CaretRightIcon";
   import WarningIcon from "phosphor-svelte/lib/WarningIcon";
   import WifiSlashIcon from "phosphor-svelte/lib/WifiSlashIcon";
+  import MapPinIcon from "phosphor-svelte/lib/MapPinIcon";
   import { agruparPorRamal, clave, proximo } from "$lib/arribos";
   import { hace } from "$lib/formato";
   import { duracion, EASE } from "$lib/movimiento";
@@ -56,6 +60,13 @@
   let verInstalaciones = $state(false);
 
   let ahora = $state(Date.now());
+
+  // Ubicación: `null` mientras no se sabe, `false` si Windows no la da.
+  let hayUbicacion = $state<boolean | null>(null);
+  let versionUbicacion = $state(0);
+  let cercanas = $state<EstacionCercana[]>([]);
+  /** Distancia ya formateada a cada Estación visible, por id. */
+  let distancias = $state<Record<number, string>>({});
 
   const esFavorito = $derived(
     actual !== null && preferencias.favoritos.some((f) => mismoFavorito(f, actual!)),
@@ -109,6 +120,7 @@
       estacion: estacion.id,
       estacion_nombre: estacion.nombre,
       ramal: soloEsteRamal ? ramal : null,
+      coordenadas: coordenadas(estacion),
     });
   }
 
@@ -121,7 +133,8 @@
     instalaciones = undefined;
     verInstalaciones = false;
     try {
-      preferencias = await api.abrir(favorito);
+      preferencias = await api.abrir($state.snapshot(favorito));
+      seguimientos.anticipaciones = preferencias.anticipaciones ?? {};
     } catch (e) {
       // Recordar el último abierto es una comodidad: no bloquea la consulta.
       console.warn(describirError(e));
@@ -172,14 +185,62 @@
     }
   }
 
+  async function ubicar() {
+    try {
+      hayUbicacion = await api.ubicar();
+    } catch {
+      hayUbicacion = false;
+    }
+    versionUbicacion++;
+    if (!hayUbicacion) return;
+    try {
+      cercanas = (await api.cercanas()) ?? [];
+    } catch {
+      // Sin conexión: quedan las últimas cercanas conocidas.
+    }
+  }
+
+  // Distancias a lo que se ve: Estaciones del selector, Favoritos y la Estación abierta.
+  $effect(() => {
+    void versionUbicacion;
+    if (!hayUbicacion) {
+      distancias = {};
+      return;
+    }
+    const destinos: [number, Coordenadas][] = [
+      ...estaciones.map((e): [number, Coordenadas] => [e.id, coordenadas(e)]),
+      ...[...preferencias.favoritos, ...(actual ? [actual] : [])]
+        .filter((f) => f.coordenadas)
+        .map((f): [number, Coordenadas] => [f.estacion, f.coordenadas!]),
+    ];
+    api
+      .distancias($state.snapshot(destinos.map(([, c]) => c)))
+      .then((textos) => {
+        if (!textos) return;
+        distancias = Object.fromEntries(destinos.map(([id], i) => [id, textos[i]]));
+      })
+      .catch(() => {});
+  });
+
+  function abrirCercana({ estacion }: EstacionCercana) {
+    abrir({
+      estacion: estacion.id,
+      estacion_nombre: estacion.nombre,
+      ramal: null,
+      coordenadas: coordenadas(estacion),
+    });
+  }
+
   function etiqueta(f: Favorito): string {
     return f.ramal ? `${f.estacion_nombre} · ${f.ramal.nombre}` : f.estacion_nombre;
   }
 
   onMount(() => {
     (async () => {
+      ubicar();
       try {
         preferencias = await api.preferencias();
+        seguimientos.anticipaciones = preferencias.anticipaciones ?? {};
       } catch (e) {
         errorCatalogo = describirError(e);
       }
@@ -191,11 +252,17 @@
     // siempre el próximo tren. Con la ventana oculta, WebView2 puede espaciar los timers
     // hasta 1 por minuto; al volver a mostrarse se refresca si los datos quedaron viejos.
     const ventana = getCurrentWindow();
-    const refresco = setInterval(refrescar, REFRESCO_MS);
+    const refresco = setInterval(() => {
+      refrescar();
+      ubicar();
+    }, REFRESCO_MS);
     const reloj = setInterval(() => (ahora = Date.now()), 1_000);
     const alMostrarse = () => {
       ahora = Date.now();
-      if (ultimaActualizacion === null || ahora - ultimaActualizacion >= REFRESCO_MS) refrescar();
+      if (ultimaActualizacion === null || ahora - ultimaActualizacion >= REFRESCO_MS) {
+        refrescar();
+        ubicar();
+      }
     };
     const dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alMostrarse());
     // Como los paneles de Windows: Escape lo oculta.
@@ -225,6 +292,31 @@
         >
           <StarIcon size={13} weight="fill" />
           {etiqueta(favorito)}
+          {#if distancias[favorito.estacion]}
+            <span class="distancia">{distancias[favorito.estacion]}</span>
+          {/if}
+        </button>
+      {/each}
+    </nav>
+  {/if}
+
+  {#if hayUbicacion === false}
+    <p class="cerca-vacio">
+      <MapPinIcon size={14} />
+      Activá la ubicación de Windows para ver estaciones cercanas
+    </p>
+  {:else if cercanas.length > 0}
+    <nav class="cerca" aria-label="Estaciones cercanas">
+      <span class="cerca-rotulo">Cerca tuyo</span>
+      {#each cercanas as cercana (cercana.estacion.id)}
+        <button
+          class="chip"
+          class:activo={actual !== null && actual.estacion === cercana.estacion.id && !actual.ramal}
+          onclick={() => abrirCercana(cercana)}
+        >
+          <MapPinIcon size={13} weight="fill" />
+          {cercana.estacion.nombre}
+          <span class="distancia">{cercana.distancia}</span>
         </button>
       {/each}
     </nav>
@@ -259,7 +351,9 @@
         >
           <option value={null}>Elegí una estación</option>
           {#each estaciones as estacion}
-            <option value={estacion.id}>{estacion.nombre}</option>
+            <option value={estacion.id}
+              >{estacion.nombre}{distancias[estacion.id] ? ` · ${distancias[estacion.id]}` : ""}</option
+            >
           {/each}
         </select>
       </label>
@@ -284,6 +378,9 @@
           <h2>{actual.estacion_nombre}</h2>
           <p class="sub">
             <span>{actual.ramal ? actual.ramal.nombre : "Todos los ramales"}</span>
+            {#if distancias[actual.estacion]}
+              <span>{distancias[actual.estacion]}</span>
+            {/if}
             {#if ultimaActualizacion !== null && !desactualizado}
               <span class="sello">Actualizado hace {hace(ultimaActualizacion, ahora)}</span>
             {/if}
@@ -502,6 +599,37 @@
   .chip.activo {
     border-color: var(--acento);
     color: var(--acento);
+  }
+  .distancia {
+    color: var(--texto-suave);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cerca {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .cerca .chip :global(svg) {
+    color: var(--acento);
+  }
+  .cerca-rotulo {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--texto-suave);
+  }
+  .cerca-vacio {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--texto-suave);
   }
 
   .selector {

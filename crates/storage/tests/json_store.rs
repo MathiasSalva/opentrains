@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use opentrains_core::dominio::{
-    EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId,
+    Coordenadas, EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId,
 };
 use opentrains_core::puertos::{
     CatalogoCache, ClaveCatalogo, DatosCatalogo, EntradaCatalogo, PreferenciasRepo,
@@ -19,10 +19,15 @@ fn preferencias() -> Preferencias {
             id: RamalId(131),
             nombre: "Retiro - Junín".into(),
         }),
+        coordenadas: Some(Coordenadas {
+            latitud: -34.5888579,
+            longitud: -58.3741843,
+        }),
     };
     Preferencias {
         favoritos: vec![retiro.clone()],
         ultimo_abierto: Some(retiro),
+        anticipaciones: [(EstacionId(463), 12), (EstacionId(93), 5)].into(),
     }
 }
 
@@ -47,6 +52,22 @@ fn las_preferencias_sobreviven_a_un_reinicio() {
         JsonStore::new(&directorio).cargar().unwrap(),
         preferencias()
     );
+}
+
+#[test]
+fn las_preferencias_de_una_version_anterior_siguen_cargando() {
+    // Sin coordenadas en los Favoritos ni anticipaciones recordadas.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("preferencias.json"),
+        r#"{"favoritos":[{"estacion":463,"estacion_nombre":"Retiro (LSM)","ramal":null}],"ultimo_abierto":null}"#,
+    )
+    .unwrap();
+
+    let preferencias = JsonStore::new(dir.path()).cargar().unwrap();
+
+    assert_eq!(preferencias.favoritos[0].coordenadas, None);
+    assert!(preferencias.anticipaciones.is_empty());
 }
 
 #[test]

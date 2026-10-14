@@ -1,5 +1,8 @@
 //! Tipos del dominio. Ver `CONTEXT.md` para el glosario.
 
+use std::collections::BTreeMap;
+use std::fmt;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +12,7 @@ pub struct LineaId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RamalId(pub u32);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct EstacionId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,6 +35,57 @@ pub struct Estacion {
     pub orden: u32,
     pub latitud: f64,
     pub longitud: f64,
+}
+
+impl Estacion {
+    pub fn coordenadas(&self) -> Coordenadas {
+        Coordenadas {
+            latitud: self.latitud,
+            longitud: self.longitud,
+        }
+    }
+}
+
+/// Un punto en el mapa, en grados decimales (WGS84).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Coordenadas {
+    pub latitud: f64,
+    pub longitud: f64,
+}
+
+impl Coordenadas {
+    /// Distancia en línea recta (haversine): no es lo que se camina, es una referencia.
+    pub fn distancia(&self, otra: &Coordenadas) -> Distancia {
+        const RADIO_TIERRA_METROS: f64 = 6_371_000.0;
+        let (lat1, lat2) = (self.latitud.to_radians(), otra.latitud.to_radians());
+        let dlat = lat2 - lat1;
+        let dlon = (otra.longitud - self.longitud).to_radians();
+        let a = (dlat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
+        Distancia {
+            metros: 2.0 * RADIO_TIERRA_METROS * a.sqrt().asin(),
+        }
+    }
+}
+
+/// Distancia desde la Ubicación; se muestra como "a 850 m", "a 3,2 km" o "a 27 km".
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Distancia {
+    pub metros: f64,
+}
+
+impl fmt::Display for Distancia {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let metros = (self.metros / 10.0).round() * 10.0;
+        if metros < 1_000.0 {
+            return write!(f, "a {metros:.0} m");
+        }
+        let decimas = (self.metros / 100.0).round() / 10.0;
+        if decimas < 10.0 {
+            write!(f, "a {}", format!("{decimas:.1} km").replace('.', ","))
+        } else {
+            write!(f, "a {:.0} km", self.metros / 1_000.0)
+        }
+    }
 }
 
 /// Estado del Servicio tal como lo informa el operador.
@@ -222,6 +276,9 @@ pub struct Favorito {
     pub estacion: EstacionId,
     pub estacion_nombre: String,
     pub ramal: Option<Ramal>,
+    /// Ausentes en Favoritos guardados antes de que existieran las distancias.
+    #[serde(default)]
+    pub coordenadas: Option<Coordenadas>,
 }
 
 impl Favorito {
@@ -235,4 +292,7 @@ impl Favorito {
 pub struct Preferencias {
     pub favoritos: Vec<Favorito>,
     pub ultimo_abierto: Option<Favorito>,
+    /// Última anticipación elegida al seguir un Servicio, por Estación.
+    #[serde(default)]
+    pub anticipaciones: BTreeMap<EstacionId, u32>,
 }

@@ -54,10 +54,17 @@ struct ApiEstacion {
     longitud: String,
 }
 
+/// Estaciones de un Ramal, en el orden del recorrido.
 pub fn estaciones(json: &str) -> Result<Vec<Estacion>, SourceError> {
+    let mut estaciones = estaciones_cercanas(json)?;
+    estaciones.sort_by_key(|e| e.orden);
+    Ok(estaciones)
+}
+
+/// Estaciones cercanas a un punto, en el orden de la API (de la más cercana a la más lejana).
+pub fn estaciones_cercanas(json: &str) -> Result<Vec<Estacion>, SourceError> {
     let api: Vec<ApiEstacion> = parsear(json)?;
-    let mut estaciones = api
-        .into_iter()
+    api.into_iter()
         .map(|e| {
             Ok(Estacion {
                 id: EstacionId(numero(&e.id_estacion)?),
@@ -67,9 +74,7 @@ pub fn estaciones(json: &str) -> Result<Vec<Estacion>, SourceError> {
                 nombre: e.nombre,
             })
         })
-        .collect::<Result<Vec<_>, SourceError>>()?;
-    estaciones.sort_by_key(|e| e.orden);
-    Ok(estaciones)
+        .collect()
 }
 
 fn numero(texto: &str) -> Result<u32, SourceError> {

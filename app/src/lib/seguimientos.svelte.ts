@@ -5,7 +5,15 @@ export const seguimientos = $state({
   lista: [] as Seguimiento[],
   /** Estación abierta: los Seguimientos nuevos se crean en ella. */
   estacion: null as { id: number; nombre: string } | null,
+  /** Última anticipación elegida en cada Estación (de las Preferencias). */
+  anticipaciones: {} as Record<string, number>,
 });
+
+/** La anticipación que se usó la última vez en la Estación abierta. */
+export function anticipacionSugerida(): number | null {
+  const estacion = seguimientos.estacion?.id;
+  return estacion === undefined ? null : (seguimientos.anticipaciones[estacion] ?? null);
+}
 
 export function anticipacion(numero: number): number | null {
   const estacion = seguimientos.estacion?.id;
@@ -32,6 +40,7 @@ export async function seguir(numero: number, destino: string, anticipacion_minut
     destino,
     anticipacion_minutos,
   });
+  seguimientos.anticipaciones[estacion.id] = anticipacion_minutos;
 }
 
 export async function dejarDeSeguir(numero: number) {

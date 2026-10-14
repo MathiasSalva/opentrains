@@ -3,7 +3,12 @@
   import BellRingingIcon from "phosphor-svelte/lib/BellRingingIcon";
   import { scale } from "svelte/transition";
   import type { Arribo } from "$lib/api";
-  import { anticipacion, dejarDeSeguir, seguir } from "$lib/seguimientos.svelte";
+  import {
+    anticipacion,
+    anticipacionSugerida,
+    dejarDeSeguir,
+    seguir,
+  } from "$lib/seguimientos.svelte";
   import { duracion, EASE } from "$lib/movimiento";
 
   let { arribo }: { arribo: Arribo } = $props();
@@ -13,6 +18,7 @@
   let raiz: HTMLElement;
 
   const minutos = $derived(anticipacion(arribo.numero));
+  const sugerida = $derived(anticipacionSugerida());
   const cancelado = $derived(arribo.situacion === "cancelado");
 
   async function alternar() {
@@ -57,7 +63,12 @@
     <div class="menu" role="menu" transition:scale={{ start: 0.92, duration: duracion(140), easing: EASE }}>
       <span class="rotulo">Avisarme antes</span>
       {#each OPCIONES as m}
-        <button role="menuitem" onclick={() => elegir(m)}>{m} min</button>
+        <button
+          role="menuitem"
+          class:sugerida={m === sugerida}
+          title={m === sugerida ? "La última que elegiste en esta estación" : undefined}
+          onclick={() => elegir(m)}>{m} min</button
+        >
       {/each}
     </div>
   {/if}
@@ -130,5 +141,9 @@
   }
   .menu button:hover {
     background: color-mix(in srgb, var(--acento) 12%, transparent);
+  }
+  .menu button.sugerida {
+    color: var(--acento);
+    font-weight: 600;
   }
 </style>

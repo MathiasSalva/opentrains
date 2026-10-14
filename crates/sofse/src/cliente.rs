@@ -2,9 +2,11 @@ use std::time::Duration;
 
 use chrono::{NaiveDate, Utc};
 use opentrains_core::dominio::{
-    Arribo, Estacion, EstacionId, Instalaciones, Linea, LineaId, Ramal, RamalId,
+    Arribo, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Ramal, RamalId,
 };
-use opentrains_core::puertos::{ArribosSource, CatalogoSource, InstalacionesSource, SourceError};
+use opentrains_core::puertos::{
+    ArribosSource, CatalogoSource, EstacionesCercanasSource, InstalacionesSource, SourceError,
+};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -187,5 +189,15 @@ impl InstalacionesSource for SofseClient {
         let url = format!("{}{}", self.infoestaciones, estacion.0);
         let json = self.get(&url, None).await.map_err(Rejection::en_error)?;
         mapeo::instalaciones(&json)
+    }
+}
+
+impl EstacionesCercanasSource for SofseClient {
+    async fn estaciones_cercanas(&self, desde: Coordenadas) -> Result<Vec<Estacion>, SourceError> {
+        let ruta = format!(
+            "infraestructura/estaciones-cercanas?latitud={}&longitud={}",
+            desde.latitud, desde.longitud
+        );
+        mapeo::estaciones_cercanas(&self.get_autenticado(&ruta).await?)
     }
 }

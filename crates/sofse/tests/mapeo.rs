@@ -213,3 +213,23 @@ fn la_fecha_de_la_credencial_es_la_de_argentina_y_no_la_utc() {
         NaiveDate::from_ymd_opt(2026, 10, 13).unwrap()
     );
 }
+
+#[test]
+fn las_estaciones_cercanas_conservan_el_orden_de_la_api() {
+    // Mismo esquema que las de un Ramal, pero `incluida_en_ramales` viene como string
+    // JSON y `orden` es el de su propio Ramal: no sirve para ordenar.
+    let estaciones = mapeo::estaciones_cercanas(&fixture("estaciones_cercanas.json")).unwrap();
+
+    let ids: Vec<u32> = estaciones.iter().map(|e| e.id.0).collect();
+    assert_eq!(ids, vec![332, 463, 293, 93]);
+    assert_eq!(
+        estaciones[1],
+        Estacion {
+            id: EstacionId(463),
+            nombre: "Retiro (LSM)".into(),
+            orden: 1,
+            latitud: -34.5888579,
+            longitud: -58.3741843,
+        }
+    );
+}

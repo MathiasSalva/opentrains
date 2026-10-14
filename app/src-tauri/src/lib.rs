@@ -6,15 +6,16 @@ mod avisos;
 mod bandeja;
 #[cfg(desktop)]
 mod insignia;
+mod ubicacion;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use opentrains_core::casos_de_uso::{Catalogo, ConsultaArribos, Favoritos, Seguimientos};
+use opentrains_core::casos_de_uso::{Catalogo, Cercania, ConsultaArribos, Favoritos, Seguimientos};
 use opentrains_core::dominio::{
-    Arribo, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId, Preferencias, Ramal,
-    RamalId, Seguimiento, Situacion,
+    Arribo, Coordenadas, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId,
+    Preferencias, Ramal, RamalId, Seguimiento, Situacion,
 };
 use opentrains_core::puertos::{InstalacionesSource, SourceError, StorageError, SystemClock};
 use opentrains_sofse::SofseClient;
@@ -27,6 +28,7 @@ struct AppState {
     arribos: ConsultaArribos<Arc<SofseClient>>,
     instalaciones: Arc<SofseClient>, // Sin lógica de dominio: el caso de uso sería un pasamanos.
     favoritos: Favoritos<Arc<JsonStore>>,
+    cercania: Cercania<ubicacion::UbicacionSistema, Arc<SofseClient>>,
     seguimientos: Arc<avisos::SeguimientosApp<tauri::Wry>>,
     /// Nombre y Arribos de la Estación abierta según el último refresco, para la bandeja.
     estacion_abierta: Mutex<Option<(String, Vec<Arribo>)>>,
@@ -139,7 +141,16 @@ fn quitar_favorito(app: State<'_, AppState>, favorito: Favorito) -> Result<Prefe
 }
 
 #[tauri::command]
-fn abrir(app: State<'_, AppState>, favorito: Favorito) -> Result<Preferencias, AppError> {
+async fn abrir(app: State<'_, AppState>, mut favorito: Favorito) -> Result<Preferencias, AppError> {
+    // Favoritos de antes de las distancias: las coordenadas salen del Ramal (en caché).
+    if let (None, Some(ramal)) = (favorito.coordenadas, &favorito.ramal) {
+        if let Ok(estaciones) = app.catalogo.estaciones(ramal.id).await {
+            favorito.coordenadas = estaciones
+                .iter()
+                .find(|e| e.id == favorito.estacion)
+                .map(Estacion::coordenadas);
+        }
+    }
     Ok(app.favoritos.abrir(favorito)?)
 }
 
@@ -159,6 +170,12 @@ fn seguir(
     app: State<'_, AppState>,
     pedido: PedidoSeguimiento,
 ) -> Vec<Seguimiento> {
+    // Recordarla es una comodidad: si falla el disco, el Seguimiento sigue igual.
+    if let Ok(minutos) = u32::try_from(pedido.anticipacion_minutos) {
+        let _ = app
+            .favoritos
+            .recordar_anticipacion(pedido.estacion, minutos);
+    }
     app.seguimientos.seguir(Seguimiento::nuevo(
         pedido.estacion,
         pedido.estacion_nombre,
@@ -190,6 +207,39 @@ fn dejar_de_seguir(
 #[tauri::command]
 fn seguimientos(app: State<'_, AppState>) -> Vec<Seguimiento> {
     app.seguimientos.activos()
+}
+
+/// Consulta la Ubicación; `false` si no hay ninguna conocida.
+#[tauri::command]
+async fn ubicar(app: State<'_, AppState>) -> Result<bool, AppError> {
+    Ok(app.cercania.actualizar().await.is_some())
+}
+
+/// Distancias ya formateadas ("a 850 m") desde la última Ubicación, en el mismo orden.
+#[tauri::command]
+fn distancias(app: State<'_, AppState>, destinos: Vec<Coordenadas>) -> Option<Vec<String>> {
+    app.cercania
+        .distancias(&destinos)
+        .map(|ds| ds.iter().map(ToString::to_string).collect())
+}
+
+#[derive(Serialize)]
+struct EstacionCercanaVista {
+    estacion: Estacion,
+    distancia: String,
+}
+
+#[tauri::command]
+async fn cercanas(app: State<'_, AppState>) -> Result<Option<Vec<EstacionCercanaVista>>, AppError> {
+    Ok(app.cercania.cercanas().await?.map(|cercanas| {
+        cercanas
+            .into_iter()
+            .map(|c| EstacionCercanaVista {
+                distancia: c.distancia.to_string(),
+                estacion: c.estacion,
+            })
+            .collect()
+    }))
 }
 
 /// Recalcula el tren que muestra la bandeja (insignia y tooltip) sin consultar la API.
@@ -255,6 +305,7 @@ pub fn run() {
             app.manage(AppState {
                 catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
+                cercania: Cercania::new(ubicacion::UbicacionSistema, sofse.clone()),
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),
                 seguimientos,
@@ -285,7 +336,10 @@ pub fn run() {
             abrir,
             seguir,
             dejar_de_seguir,
-            seguimientos
+            seguimientos,
+            ubicar,
+            distancias,
+            cercanas
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar OpenTrains");

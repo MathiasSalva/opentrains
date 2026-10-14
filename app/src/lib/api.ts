@@ -5,16 +5,24 @@ export interface Linea { id: number; nombre: string }
 export interface Ramal { id: number; nombre: string }
 export interface Estacion { id: number; nombre: string; orden: number; latitud: number; longitud: number }
 
+export interface Coordenadas { latitud: number; longitud: number }
+
 export interface Favorito {
   estacion: number;
   estacion_nombre: string;
   ramal: Ramal | null;
+  /** Ausentes en Favoritos guardados antes de que existieran las distancias. */
+  coordenadas?: Coordenadas | null;
 }
 
 export interface Preferencias {
   favoritos: Favorito[];
   ultimo_abierto: Favorito | null;
+  /** Última anticipación elegida al seguir un Servicio, por id de Estación. */
+  anticipaciones?: Record<string, number>;
 }
+
+export interface EstacionCercana { estacion: Estacion; distancia: string }
 
 export type Situacion =
   | "cancelado"
@@ -97,7 +105,16 @@ export const api = {
   seguir: (pedido: Seguimiento) => invoke<Seguimiento[]>("seguir", { pedido }),
   dejarDeSeguir: (estacion: number, numero: number) =>
     invoke<Seguimiento[]>("dejar_de_seguir", { estacion, numero }),
+  /** `false` si no hay Ubicación conocida (desactivada, denegada o sin señal). */
+  ubicar: () => invoke<boolean>("ubicar"),
+  /** Textos como "a 850 m", en el orden de `destinos`; `null` sin Ubicación. */
+  distancias: (destinos: Coordenadas[]) => invoke<string[] | null>("distancias", { destinos }),
+  cercanas: () => invoke<EstacionCercana[] | null>("cercanas"),
 };
+
+export function coordenadas(e: Estacion): Coordenadas {
+  return { latitud: e.latitud, longitud: e.longitud };
+}
 
 export function mismoFavorito(a: Favorito, b: Favorito): boolean {
   return a.estacion === b.estacion && (a.ramal?.id ?? null) === (b.ramal?.id ?? null);

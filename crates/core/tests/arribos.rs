@@ -58,6 +58,7 @@ fn retiro_a_pilar() -> Favorito {
             id: RamalId(131),
             nombre: "Retiro-Junín".into(),
         }),
+        coordenadas: None,
     }
 }
 
