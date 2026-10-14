@@ -31,6 +31,7 @@
   import GrupoRamal from "$lib/components/GrupoRamal.svelte";
   import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
   import { recargarSeguimientos, seguimientos } from "$lib/seguimientos.svelte";
+  import { esEscritorio } from "$lib/plataforma";
 
   const REFRESCO_MS = 45_000;
 
@@ -251,8 +252,9 @@
     // Refresco cada 45 s también con el panel oculto: así el ícono de la bandeja muestra
     // siempre el próximo tren. Con la ventana oculta, WebView2 puede espaciar los timers
     // hasta 1 por minuto; al volver a mostrarse se refresca si los datos quedaron viejos.
-    const ventana = getCurrentWindow();
+    // En móvil no hay bandeja: con la app en segundo plano no se refresca (batería y datos).
     const refresco = setInterval(() => {
+      if (!esEscritorio && document.visibilityState === "hidden") return;
       refrescar();
       ubicar();
     }, REFRESCO_MS);
@@ -264,15 +266,24 @@
         ubicar();
       }
     };
-    const dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alMostrarse());
-    // Como los paneles de Windows: Escape lo oculta.
-    const alTeclear = (e: KeyboardEvent) => e.key === "Escape" && ventana.hide();
-    document.addEventListener("keydown", alTeclear);
+    const alCambiarVisibilidad = () => document.visibilityState === "visible" && alMostrarse();
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    // Solo el panel de escritorio: el foco marca cuándo se vuelve a mostrar y, como los
+    // paneles de Windows, Escape lo oculta. En móvil el "atrás" del sistema ya minimiza.
+    let dejarDeEscuchar: Promise<() => void> | undefined;
+    let alTeclear: ((e: KeyboardEvent) => void) | undefined;
+    if (esEscritorio) {
+      const ventana = getCurrentWindow();
+      dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alMostrarse());
+      alTeclear = (e) => e.key === "Escape" && ventana.hide();
+      document.addEventListener("keydown", alTeclear);
+    }
     return () => {
       clearInterval(refresco);
       clearInterval(reloj);
-      document.removeEventListener("keydown", alTeclear);
-      dejarDeEscuchar.then((fn) => fn());
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+      if (alTeclear) document.removeEventListener("keydown", alTeclear);
+      dejarDeEscuchar?.then((fn) => fn());
     };
   });
 </script>
@@ -547,7 +558,9 @@
   }
 
   main {
-    padding: 14px 14px 24px;
+    /* En Android 15+ la webview va de borde a borde: se respetan la barra de estado y la de gestos. */
+    padding: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
+      calc(24px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
     display: grid;
     gap: 12px;
   }

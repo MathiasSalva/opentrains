@@ -186,6 +186,14 @@ fn seguir(
     // Revisión inmediata: si el tren ya está dentro de la anticipación, el Aviso llega ya.
     let seguimientos = app.seguimientos.clone();
     tauri::async_runtime::spawn(async move {
+        // Android 13+ pide el permiso de notificaciones en tiempo de ejecución; se pide
+        // con el primer Seguimiento, que es cuando hace falta.
+        #[cfg(mobile)]
+        {
+            let handle = handle.clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || avisos::pedir_permiso(&handle))
+                .await;
+        }
         let _ = seguimientos.revisar().await;
         refrescar_bandeja(&handle);
     });
@@ -289,6 +297,8 @@ pub fn run() {
                 .build(),
         )
         .manage(bandeja::EstadoPanel::default());
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_geolocation::init());
     builder
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
@@ -300,12 +310,16 @@ pub fn run() {
                 SystemClock,
             ));
             let handle = app.handle().clone();
-            // Cada vuelta también recalcula la cuenta regresiva de la bandeja.
+            // Cada vuelta también recalcula la cuenta regresiva de la bandeja. En Android el
+            // loop solo corre con la app abierta: en segundo plano el sistema lo duerme.
             avisos::vigilar(seguimientos.clone(), move || refrescar_bandeja(&handle));
             app.manage(AppState {
                 catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
-                cercania: Cercania::new(ubicacion::UbicacionSistema, sofse.clone()),
+                cercania: Cercania::new(
+                    ubicacion::UbicacionSistema::new(app.handle()),
+                    sofse.clone(),
+                ),
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),
                 seguimientos,

@@ -34,6 +34,22 @@ impl<R: Runtime> Notificador for NotificadorSistema<R> {
     }
 }
 
+/// Bloqueante: pide el permiso de notificaciones si todavía no se decidió. Si la persona
+/// lo rechaza, los Seguimientos siguen igual pero los Avisos no se ven.
+#[cfg(mobile)]
+pub fn pedir_permiso<R: Runtime>(app: &AppHandle<R>) {
+    use tauri::plugin::PermissionState;
+    let notificaciones = app.notification();
+    if matches!(
+        notificaciones.permission_state(),
+        Ok(PermissionState::Prompt | PermissionState::PromptWithRationale)
+    ) {
+        if let Err(error) = notificaciones.request_permission() {
+            eprintln!("[avisos] no se pudo pedir el permiso: {error}");
+        }
+    }
+}
+
 /// Título y cuerpo de la notificación, p. ej. "Retiro (LSM): #3907 a Pilar" / "Sale en 9 min".
 pub fn textos(seguimiento: &Seguimiento, aviso: &Aviso) -> (String, String) {
     let titulo = format!(
@@ -50,7 +66,8 @@ pub fn textos(seguimiento: &Seguimiento, aviso: &Aviso) -> (String, String) {
 }
 
 /// Revisa los Seguimientos periódicamente mientras la app esté viva; `despues` corre al
-/// final de cada vuelta, haya o no Seguimientos.
+/// final de cada vuelta, haya o no Seguimientos. En Android el proceso en segundo plano
+/// queda dormido o lo mata el sistema, así que los Avisos llegan solo con la app abierta.
 pub fn vigilar<R: Runtime>(
     seguimientos: Arc<SeguimientosApp<R>>,
     despues: impl Fn() + Send + 'static,

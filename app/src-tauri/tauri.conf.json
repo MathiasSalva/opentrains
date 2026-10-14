@@ -13,15 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "OpenTrains",
-        "width": 400,
-        "height": 640,
-        "resizable": false,
-        "decorations": false,
-        "shadow": true,
-        "skipTaskbar": true,
-        "alwaysOnTop": true,
-        "visible": false
+        "title": "OpenTrains"
       }
     ],
     "security": {
