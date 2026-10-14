@@ -2,4 +2,5 @@
 
 pub mod casos_de_uso;
 pub mod dominio;
+pub mod indicador;
 pub mod puertos;

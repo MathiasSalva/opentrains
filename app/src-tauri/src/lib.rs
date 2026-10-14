@@ -4,9 +4,11 @@
 mod avisos;
 #[cfg(desktop)]
 mod bandeja;
+#[cfg(desktop)]
+mod insignia;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 use opentrains_core::casos_de_uso::{Catalogo, ConsultaArribos, Favoritos, Seguimientos};
@@ -26,6 +28,8 @@ struct AppState {
     instalaciones: Arc<SofseClient>, // Sin lógica de dominio: el caso de uso sería un pasamanos.
     favoritos: Favoritos<Arc<JsonStore>>,
     seguimientos: Arc<avisos::SeguimientosApp<tauri::Wry>>,
+    /// Nombre y Arribos de la Estación abierta según el último refresco, para la bandeja.
+    estacion_abierta: Mutex<Option<(String, Vec<Arribo>)>>,
 }
 
 /// Errores tal como los ve el frontend.
@@ -98,10 +102,13 @@ async fn estaciones(app: State<'_, AppState>, ramal: RamalId) -> Result<Vec<Esta
 
 #[tauri::command]
 async fn arribos(
+    handle: tauri::AppHandle,
     app: State<'_, AppState>,
     favorito: Favorito,
 ) -> Result<Vec<ArriboVista>, AppError> {
     let arribos = app.arribos.arribos(&favorito).await?;
+    *app.estacion_abierta.lock().unwrap() = Some((favorito.estacion_nombre, arribos.clone()));
+    refrescar_bandeja(&handle);
     Ok(arribos.into_iter().map(ArriboVista::from).collect())
 }
 
@@ -147,7 +154,11 @@ struct PedidoSeguimiento {
 }
 
 #[tauri::command]
-fn seguir(app: State<'_, AppState>, pedido: PedidoSeguimiento) -> Vec<Seguimiento> {
+fn seguir(
+    handle: tauri::AppHandle,
+    app: State<'_, AppState>,
+    pedido: PedidoSeguimiento,
+) -> Vec<Seguimiento> {
     app.seguimientos.seguir(Seguimiento::nuevo(
         pedido.estacion,
         pedido.estacion_nombre,
@@ -159,17 +170,20 @@ fn seguir(app: State<'_, AppState>, pedido: PedidoSeguimiento) -> Vec<Seguimient
     let seguimientos = app.seguimientos.clone();
     tauri::async_runtime::spawn(async move {
         let _ = seguimientos.revisar().await;
+        refrescar_bandeja(&handle);
     });
     app.seguimientos.activos()
 }
 
 #[tauri::command]
 fn dejar_de_seguir(
+    handle: tauri::AppHandle,
     app: State<'_, AppState>,
     estacion: EstacionId,
     numero: u32,
 ) -> Vec<Seguimiento> {
     app.seguimientos.dejar_de_seguir(estacion, numero);
+    refrescar_bandeja(&handle);
     app.seguimientos.activos()
 }
 
@@ -178,13 +192,24 @@ fn seguimientos(app: State<'_, AppState>) -> Vec<Seguimiento> {
     app.seguimientos.activos()
 }
 
-/// Texto del ícono de la bandeja con el próximo tren; lo arma el frontend en cada refresco.
-#[tauri::command]
-fn actualizar_bandeja(app: tauri::AppHandle, texto: String) {
+/// Recalcula el tren que muestra la bandeja (insignia y tooltip) sin consultar la API.
+fn refrescar_bandeja(handle: &tauri::AppHandle) {
     #[cfg(desktop)]
-    bandeja::tooltip(&app, &texto);
+    {
+        let app = handle.state::<AppState>();
+        let seguimientos = app.seguimientos.activos();
+        let abierta = app.estacion_abierta.lock().unwrap().clone();
+        let indicador = opentrains_core::indicador::indicador(
+            &seguimientos,
+            abierta.as_ref().map(
+                |(nombre, arribos)| opentrains_core::indicador::EstacionAbierta { nombre, arribos },
+            ),
+            Utc::now(),
+        );
+        bandeja::mostrar_indicador(handle, indicador.as_ref());
+    }
     #[cfg(not(desktop))]
-    let _ = (app, texto);
+    let _ = handle;
 }
 
 /// `%APPDATA%\OpenTrains` en Windows; el directorio de datos de la app en otras plataformas.
@@ -224,13 +249,16 @@ pub fn run() {
                 avisos::NotificadorSistema(app.handle().clone()),
                 SystemClock,
             ));
-            avisos::vigilar(seguimientos.clone());
+            let handle = app.handle().clone();
+            // Cada vuelta también recalcula la cuenta regresiva de la bandeja.
+            avisos::vigilar(seguimientos.clone(), move || refrescar_bandeja(&handle));
             app.manage(AppState {
                 catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
                 instalaciones: sofse,
                 favoritos: Favoritos::new(store),
                 seguimientos,
+                estacion_abierta: Mutex::default(),
             });
             #[cfg(desktop)]
             {
@@ -255,7 +283,6 @@ pub fn run() {
             agregar_favorito,
             quitar_favorito,
             abrir,
-            actualizar_bandeja,
             seguir,
             dejar_de_seguir,
             seguimientos

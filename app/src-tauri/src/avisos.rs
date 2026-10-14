@@ -49,13 +49,18 @@ pub fn textos(seguimiento: &Seguimiento, aviso: &Aviso) -> (String, String) {
     (titulo, cuerpo)
 }
 
-/// Revisa los Seguimientos periódicamente mientras la app esté viva.
-pub fn vigilar<R: Runtime>(seguimientos: Arc<SeguimientosApp<R>>) {
+/// Revisa los Seguimientos periódicamente mientras la app esté viva; `despues` corre al
+/// final de cada vuelta, haya o no Seguimientos.
+pub fn vigilar<R: Runtime>(
+    seguimientos: Arc<SeguimientosApp<R>>,
+    despues: impl Fn() + Send + 'static,
+) {
     tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(INTERVALO).await;
             // Un error de red deja los Seguimientos intactos; se reintenta en la próxima vuelta.
             let _ = seguimientos.revisar().await;
+            despues();
         }
     });
 }

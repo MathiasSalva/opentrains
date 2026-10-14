@@ -235,6 +235,7 @@ impl<A: ArribosSource, N: Notificador, C: Clock> Seguimientos<A, N, C> {
                 else {
                     return false;
                 };
+                seguimiento.ultimo_arribo = Some(arribo.clone());
                 for aviso in seguimiento.evaluar(arribo, ahora) {
                     a_notificar.push((seguimiento.clone(), aviso));
                 }

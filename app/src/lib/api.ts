@@ -93,7 +93,6 @@ export const api = {
   agregarFavorito: (favorito: Favorito) => invoke<Preferencias>("agregar_favorito", { favorito }),
   quitarFavorito: (favorito: Favorito) => invoke<Preferencias>("quitar_favorito", { favorito }),
   abrir: (favorito: Favorito) => invoke<Preferencias>("abrir", { favorito }),
-  actualizarBandeja: (texto: string) => invoke<void>("actualizar_bandeja", { texto }),
   seguimientos: () => invoke<Seguimiento[]>("seguimientos"),
   seguir: (pedido: Seguimiento) => invoke<Seguimiento[]>("seguir", { pedido }),
   dejarDeSeguir: (estacion: number, numero: number) =>

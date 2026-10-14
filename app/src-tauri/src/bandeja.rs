@@ -5,10 +5,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use chrono::FixedOffset;
+use opentrains_core::dominio::Situacion;
+use opentrains_core::indicador::Indicador;
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, PhysicalPosition, Runtime, WebviewWindow, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
+
+use crate::insignia;
 
 pub const ID: &str = "principal";
 /// Argumento con el que Windows lanza la app al iniciar sesión: arranca oculta.
@@ -146,9 +152,70 @@ pub fn comportamiento_panel<R: Runtime>(ventana: &WebviewWindow<R>) {
     });
 }
 
-/// Actualiza el tooltip del ícono con el próximo tren (lo arma el frontend).
-pub fn tooltip<R: Runtime>(app: &AppHandle<R>, texto: &str) {
-    if let Some(bandeja) = app.tray_by_id(ID) {
-        let _ = bandeja.set_tooltip(Some(texto));
+/// Muestra en el ícono el tren que se ve de un vistazo: insignia con los minutos y tooltip.
+pub fn mostrar_indicador<R: Runtime>(app: &AppHandle<R>, indicador: Option<&Indicador>) {
+    let Some(bandeja) = app.tray_by_id(ID) else {
+        return;
+    };
+    let Some(base) = app.default_window_icon() else {
+        return;
+    };
+    let tooltip = indicador.map_or_else(|| "OpenTrains".to_owned(), texto);
+    #[cfg(debug_assertions)]
+    eprintln!("[bandeja] {tooltip}");
+    let _ = bandeja.set_tooltip(Some(tooltip));
+    let icono = match indicador.and_then(insignia_de) {
+        Some((texto, color)) => {
+            let (px, lado) = insignia::reducir(base.rgba(), base.width(), insignia::LADO_BANDEJA);
+            Image::new_owned(
+                insignia::dibujar(&px, lado, lado, &texto, color),
+                lado,
+                lado,
+            )
+        }
+        None => base.clone().to_owned(),
+    };
+    let _ = bandeja.set_icon(Some(icono));
+}
+
+/// Texto y color de la insignia; sin insignia a partir de 100 min.
+fn insignia_de(i: &Indicador) -> Option<(String, [u8; 3])> {
+    // Los mismos colores semánticos que el panel.
+    let color = match i.situacion {
+        Situacion::Cancelado => return Some(("x".into(), [220, 38, 38])),
+        Situacion::EnAnden => [22, 163, 74],
+        _ if i.arribando => [22, 163, 74],
+        Situacion::Demorado => [217, 119, 6],
+        _ => [31, 95, 209],
+    };
+    (i.minutos < 100).then(|| (i.minutos.to_string(), color))
+}
+
+/// Ej.: "Retiro (LSM) a Pilar: 4 min (10:58, +6). Andén 3 🔔".
+pub fn texto(i: &Indicador) -> String {
+    let argentina = FixedOffset::west_opt(3 * 3600).expect("offset válido");
+    let a = &i.arribo;
+    let hora = a.programada.with_timezone(&argentina).format("%H:%M");
+    let horario = match a.demora_minutos() {
+        Some(demora) => format!("{hora}, +{demora}"),
+        None => hora.to_string(),
+    };
+    let estado = if i.situacion == Situacion::Cancelado {
+        "Cancelado".to_owned()
+    } else if i.arribando {
+        "Arribando".to_owned()
+    } else {
+        format!("{} min", i.minutos)
+    };
+    let mut texto = format!(
+        "{} a {}: {estado} ({horario})",
+        i.estacion_nombre, a.servicio.destino
+    );
+    if let (Some(anden), false) = (&a.anden, i.situacion == Situacion::Cancelado) {
+        texto.push_str(&format!(". Andén {anden}"));
     }
+    if i.seguido {
+        texto.push_str(" 🔔");
+    }
+    texto
 }

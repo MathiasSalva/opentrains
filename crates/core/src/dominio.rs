@@ -123,6 +123,9 @@ pub struct Seguimiento {
     pub demora_avisada: Option<i64>,
     #[serde(default)]
     pub cancelacion_avisada: bool,
+    /// Último Arribo visto de este Servicio en la Estación.
+    #[serde(default)]
+    pub ultimo_arribo: Option<Arribo>,
 }
 
 /// Algo que vale la pena avisarle al usuario sobre un Servicio que sigue.
@@ -159,6 +162,7 @@ impl Seguimiento {
             recordatorio_enviado: false,
             demora_avisada: None,
             cancelacion_avisada: false,
+            ultimo_arribo: None,
         }
     }
 

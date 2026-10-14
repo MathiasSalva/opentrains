@@ -20,7 +20,7 @@
   import CaretRightIcon from "phosphor-svelte/lib/CaretRightIcon";
   import WarningIcon from "phosphor-svelte/lib/WarningIcon";
   import WifiSlashIcon from "phosphor-svelte/lib/WifiSlashIcon";
-  import { agruparPorRamal, clave, proximo, textoBandeja } from "$lib/arribos";
+  import { agruparPorRamal, clave, proximo } from "$lib/arribos";
   import { hace } from "$lib/formato";
   import { duracion, EASE } from "$lib/movimiento";
   import ProximoArribo from "$lib/components/ProximoArribo.svelte";
@@ -140,13 +140,11 @@
       ultimaActualizacion = Date.now();
       errorArribos = null;
       fuenteCambiada = false;
-      api.actualizarBandeja(textoBandeja(actual.estacion_nombre, nuevos)).catch(() => {});
       recargarSeguimientos();
     } catch (e) {
       if (consulta !== ultimaConsulta) return;
       errorArribos = describirError(e);
       fuenteCambiada = esFuenteCambiada(e);
-      api.actualizarBandeja(`${actual?.estacion_nombre ?? "OpenTrains"}: sin datos`).catch(() => {});
     } finally {
       if (consulta === ultimaConsulta) cargando = false;
     }
