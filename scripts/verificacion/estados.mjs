@@ -1,0 +1,80 @@
+// Uso: node estados.mjs <png> <light|dark>
+// Muestra todas las Situaciones con datos de ejemplo (intercepta el comando `arribos`)
+// en un viewport de 420 px, y saca una captura.
+import { writeFileSync } from "node:fs";
+
+const [salida, esquema] = process.argv.slice(2);
+const targets = await (await fetch("http://127.0.0.1:9333/json")).json();
+const ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
+await new Promise((r) => (ws.onopen = r));
+let id = 0;
+const pendientes = new Map();
+ws.onmessage = (m) => {
+  const msg = JSON.parse(m.data);
+  pendientes.get(msg.id)?.(msg.result);
+};
+const enviar = (method, params = {}) =>
+  new Promise((r) => {
+    pendientes.set(++id, r);
+    ws.send(JSON.stringify({ id, method, params }));
+  });
+
+await enviar("Emulation.setDeviceMetricsOverride", { width: 420, height: 700, deviceScaleFactor: 1, mobile: false });
+await enviar("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: esquema }] });
+
+// Datos de ejemplo con todas las Situaciones; se sirven interceptando la IPC de Tauri
+// (http://ipc.localhost/arribos) con el dominio Fetch de CDP.
+const ahora = Date.now();
+const t = (s) => new Date(ahora + s * 1000).toISOString();
+const A = { id: 65, nombre: "Retiro-Cabred" };
+const B = { id: 131, nombre: "Retiro - Junín" };
+const a = (numero, ramal, destino, estado, situacion, seg, extra = {}) => ({
+  numero, ramal, destino, estado, situacion, formacion: null, anden: null,
+  programada: t(seg), demora_minutos: null, momento: t(seg), ...extra,
+});
+const datos = [
+  a(3301, A, "Pilar", "Programado", "cancelado", 180),
+  a(3303, A, "Pilar", "Programado", "programado", 40, { anden: "3" }),
+  a(3305, B, "Junín", "En Andén", "en_anden", 300, { anden: "5" }),
+  a(3307, A, "José C. Paz", "Partió", "demorado", 540, { demora_minutos: 6, programada: t(180) }),
+  a(3309, B, "Junín", "Partió", "en_camino", 720),
+  a(3311, B, "Mercedes", "Confirmado", "desconocido", 900),
+  a(3313, A, "Pilar", "Programado", "programado", 1500),
+  a(3315, A, "Dr. Cabred", "Programado", "programado", 2220),
+];
+const cuerpo = Buffer.from(JSON.stringify(datos)).toString("base64");
+const anterior = ws.onmessage;
+ws.onmessage = (m) => {
+  const msg = JSON.parse(m.data);
+  if (msg.method === "Fetch.requestPaused") {
+    const preflight = msg.params.request.method === "OPTIONS";
+    ws.send(JSON.stringify({
+      id: ++id,
+      method: "Fetch.fulfillRequest",
+      params: {
+        requestId: msg.params.requestId,
+        responseCode: preflight ? 204 : 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "application/json" },
+          { name: "Tauri-Response", value: "ok" },
+          { name: "Access-Control-Allow-Origin", value: "*" },
+          { name: "Access-Control-Allow-Headers", value: "*" },
+          { name: "Access-Control-Expose-Headers", value: "Tauri-Response" },
+        ],
+        body: preflight ? "" : cuerpo,
+      },
+    }));
+    return;
+  }
+  anterior(m);
+};
+await enviar("Fetch.enable", { patterns: [{ urlPattern: "*ipc.localhost/arribos*" }] });
+const mock = `(() => {
+  document.querySelector('button[title="Actualizar"]').click();
+  return new Promise((r) => setTimeout(() => { window.scrollTo(0, document.querySelector('.estacion').offsetTop - 8); r("ok"); }, 1800));
+})()`;
+await enviar("Runtime.evaluate", { expression: mock, awaitPromise: true });
+await enviar("Fetch.disable");
+const shot = await enviar("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
+writeFileSync(salida, Buffer.from(shot.data, "base64"));
+ws.close();
