@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Arribo } from "$lib/api";
-  import { claseSituacion } from "$lib/arribos";
+  import { claseSituacion, clave } from "$lib/arribos";
+  import { detalle } from "$lib/detalle.svelte";
   import { cuentaRegresiva, hora } from "$lib/formato";
   import SituacionPill from "./SituacionPill.svelte";
   import BotonAvisar from "./BotonAvisar.svelte";
@@ -12,17 +13,20 @@
   const demorado = $derived(arribo.demora_minutos !== null && arribo.demora_minutos > 0);
 </script>
 
+<!-- La fila abre el detalle del Servicio; la campana es un botón aparte, al lado. -->
 <div class="fila sit-{clase}">
-  <span class="cuenta">{cuentaRegresiva(arribo.momento, ahora)}</span>
-  <div class="detalle">
-    <span class="destino">a {arribo.destino}</span>
-    <span class="meta">
-      <span class:estimada={demorado}>{hora(arribo.momento)}</span>
-      {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
-      {#if arribo.anden}<span>andén {arribo.anden}</span>{/if}
+  <button class="abrir" onclick={() => (detalle.clave = clave(arribo))} aria-haspopup="dialog">
+    <span class="cuenta">{cuentaRegresiva(arribo.momento, ahora)}</span>
+    <span class="detalle">
+      <span class="destino">a {arribo.destino}</span>
+      <span class="meta">
+        <span class:estimada={demorado}>{hora(arribo.momento)}</span>
+        {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
+        {#if arribo.anden}<span>andén {arribo.anden}</span>{/if}
+      </span>
     </span>
-  </div>
-  <SituacionPill {arribo} {ahora} compacta />
+    <SituacionPill {arribo} {ahora} compacta />
+  </button>
   <BotonAvisar {arribo} />
 </div>
 
@@ -31,11 +35,32 @@
     /* El ancho de la fila decide si la Situación entra con texto o solo con ícono. */
     container: fila / inline-size;
     display: grid;
-    grid-template-columns: 4.2rem minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 4px;
+    position: relative;
+  }
+  .abrir {
+    display: grid;
+    grid-template-columns: 4.2rem minmax(0, 1fr) auto;
     align-items: center;
     gap: 6px 10px;
-    padding: 9px 6px 9px 14px;
-    position: relative;
+    min-height: var(--objetivo-min);
+    padding: 6px 4px 6px 10px;
+    border: none;
+    border-radius: var(--radio-s);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--mov-ui);
+  }
+  @media (hover: hover) {
+    .abrir:hover {
+      background: var(--superficie-hover);
+    }
   }
   /* Barra con el color de la Situación: se lee de un vistazo al recorrer la lista. */
   .fila::before {

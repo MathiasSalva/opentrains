@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Arribo } from "$lib/api";
-  import { claseSituacion, segundosRestantes } from "$lib/arribos";
+  import { claseSituacion, clave, segundosRestantes } from "$lib/arribos";
+  import { detalle } from "$lib/detalle.svelte";
   import { hora, partesCuenta } from "$lib/formato";
   import SituacionPill from "./SituacionPill.svelte";
   import BotonAvisar from "./BotonAvisar.svelte";
@@ -20,33 +21,36 @@
       <BotonAvisar {arribo} />
     </div>
   </div>
-  <div class="cuerpo">
-    <div class="cuenta">
+  <!-- El cuerpo de la tarjeta abre el detalle del Servicio. -->
+  <button class="abrir" onclick={() => (detalle.clave = clave(arribo))} aria-haspopup="dialog">
+  <span class="cuerpo">
+    <span class="cuenta">
       <span class="valor">{cuenta.valor}</span>
       {#if cuenta.unidad}<span class="unidad">{cuenta.unidad}</span>{/if}
-    </div>
-    <div class="destino">
+    </span>
+    <span class="destino">
       <strong>a {arribo.destino}</strong>
       <span>{arribo.ramal.nombre}</span>
-    </div>
-  </div>
-  <dl class="datos">
-    <div>
-      <dt>Horario</dt>
-      <dd>
+    </span>
+  </span>
+  <span class="datos">
+    <span class="dato">
+      <span class="dt">Horario</span>
+      <span class="dd">
         <span class:estimada={demorado}>{hora(arribo.momento)}</span>
         {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
-      </dd>
-    </div>
-    <div>
-      <dt>Andén</dt>
-      <dd class="anden" class:sin-asignar={!arribo.anden}>{arribo.anden ?? "Sin asignar"}</dd>
-    </div>
-    <div>
-      <dt>Servicio</dt>
-      <dd>#{arribo.numero}</dd>
-    </div>
-  </dl>
+      </span>
+    </span>
+    <span class="dato">
+      <span class="dt">Andén</span>
+      <span class="dd anden" class:sin-asignar={!arribo.anden}>{arribo.anden ?? "Sin asignar"}</span>
+    </span>
+    <span class="dato">
+      <span class="dt">Servicio</span>
+      <span class="dd">#{arribo.numero}</span>
+    </span>
+  </span>
+  </button>
 </article>
 
 <style>
@@ -76,6 +80,25 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--texto-suave);
+  }
+  .abrir {
+    display: block;
+    width: calc(100% + 16px);
+    margin: 2px -8px -4px;
+    padding: 4px 8px;
+    border: none;
+    border-radius: var(--radio-m);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--mov-ui);
+  }
+  @media (hover: hover) {
+    .abrir:hover {
+      background: color-mix(in srgb, var(--sit) 7%, transparent);
+    }
   }
   .cuerpo {
     display: flex;
@@ -120,6 +143,9 @@
     font-size: var(--t-meta);
     color: var(--texto-suave);
   }
+  .dato {
+    display: grid;
+  }
   .datos {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -127,12 +153,12 @@
     padding-top: 10px;
     border-top: 1px solid var(--borde);
   }
-  dt {
+  .dt {
     font-family: var(--fuente-chica);
     font-size: var(--t-micro);
     color: var(--texto-tenue);
   }
-  dd {
+  .dd {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;

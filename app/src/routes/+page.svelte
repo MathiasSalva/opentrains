@@ -34,6 +34,9 @@
   import ProximoArribo from "$lib/components/ProximoArribo.svelte";
   import GrupoRamal from "$lib/components/GrupoRamal.svelte";
   import FilaChips from "$lib/components/FilaChips.svelte";
+  import Hoja from "$lib/components/Hoja.svelte";
+  import DetalleServicio from "$lib/components/DetalleServicio.svelte";
+  import { detalle } from "$lib/detalle.svelte";
   import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
   import { recargarSeguimientos, seguimientos } from "$lib/seguimientos.svelte";
   import { esEscritorio } from "$lib/plataforma";
@@ -81,6 +84,8 @@
     actual !== null && preferencias.favoritos.some((f) => mismoFavorito(f, actual!)),
   );
   const destacado = $derived(proximo(arribos));
+  // El Servicio de la hoja se busca en cada refresco: si ya pasó, la hoja se cierra.
+  const enDetalle = $derived(arribos.find((a) => clave(a) === detalle.clave) ?? null);
   const grupos = $derived(agruparPorRamal(arribos.filter((a) => a !== destacado)));
   // Un solo Ramal que ya se nombra arriba (Favorito acotado o el del próximo tren): sin encabezado.
   const ramalYaNombrado = $derived(
@@ -147,6 +152,7 @@
 
   async function abrir(favorito: Favorito) {
     actual = favorito;
+    detalle.clave = null;
     seguimientos.estacion = { id: favorito.estacion, nombre: favorito.estacion_nombre };
     arribos = [];
     ultimaActualizacion = null;
@@ -323,7 +329,8 @@
       // usado), después el selector desplegado y recién entonces oculta el panel.
       alTeclear = (e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
-        if (selectorAbierto && actual) selectorAbierto = false;
+        if (detalle.clave) detalle.clave = null;
+        else if (selectorAbierto && actual) selectorAbierto = false;
         else ventana.hide();
       };
       document.addEventListener("keydown", alTeclear);
@@ -568,6 +575,11 @@
         </div>
       {/if}
     </section>
+  {/if}
+  {#if enDetalle}
+    <Hoja titulo="a {enDetalle.destino}" alCerrar={() => (detalle.clave = null)}>
+      <DetalleServicio arribo={enDetalle} {ahora} />
+    </Hoja>
   {/if}
 </main>
 
