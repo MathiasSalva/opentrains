@@ -1,34 +1,43 @@
 //! Casos de uso: la API pública de `core` que consumen los adaptadores de entrada.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::sync::Mutex;
 
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 
 use serde::Serialize;
 
 use crate::dominio::{
-    Arribo, Coordenadas, Distancia, Estacion, EstacionId, Favorito, Linea, LineaId, Preferencias,
-    Ramal, RamalId, Seguimiento,
+    Arribo, Coordenadas, Distancia, Estacion, EstacionId, Favorito, Linea, LineaId, Noticia,
+    Preferencias, Ramal, RamalId, Seguimiento,
 };
 use crate::puertos::{
     ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo,
-    EntradaCatalogo, EstacionesCercanasSource, Notificador, PreferenciasRepo, SourceError,
-    StorageError, UbicacionSource,
+    EntradaCatalogo, EstacionesCercanasSource, NoticiasSource, Notificador, PreferenciasRepo,
+    SourceError, StorageError, UbicacionSource,
 };
+
+/// Último andén conocido de un Servicio y, si hubo un Cambio de andén, el anterior.
+type AndenVisto = (String, Option<String>);
 
 /// Arribos de un Favorito, listos para mostrar.
 pub struct ConsultaArribos<A> {
     source: A,
+    /// Por Servicio en cada Estación; vive en memoria mientras el Arribo siga en la lista.
+    andenes: Mutex<HashMap<(EstacionId, u32), AndenVisto>>,
 }
 
 impl<A: ArribosSource> ConsultaArribos<A> {
     pub fn new(source: A) -> Self {
-        Self { source }
+        Self {
+            source,
+            andenes: Mutex::default(),
+        }
     }
 
-    /// Sin Servicios ocultos, ordenados por el momento en que llegan.
+    /// Sin Servicios ocultos, ordenados por el momento en que llegan, y con el Cambio de
+    /// andén marcado.
     pub async fn arribos(&self, favorito: &Favorito) -> Result<Vec<Arribo>, SourceError> {
         let ramal = favorito.ramal.as_ref().map(|r| r.id);
         let mut arribos: Vec<Arribo> = self
@@ -39,7 +48,24 @@ impl<A: ArribosSource> ConsultaArribos<A> {
             .filter(|a| !a.servicio.oculto)
             .collect();
         arribos.sort_by_key(|a| a.momento);
+        self.marcar_cambios_de_anden(favorito.estacion, &mut arribos);
         Ok(arribos)
+    }
+
+    fn marcar_cambios_de_anden(&self, estacion: EstacionId, arribos: &mut [Arribo]) {
+        let mut andenes = self.andenes.lock().unwrap();
+        andenes.retain(|(e, numero), _| {
+            *e != estacion || arribos.iter().any(|a| a.servicio.numero == *numero)
+        });
+        for arribo in arribos.iter_mut() {
+            let clave = (estacion, arribo.servicio.numero);
+            let (conocido, anterior) = andenes.get(&clave).cloned().unzip();
+            arribo.marcar_cambio_de_anden(conocido.as_deref(), anterior.flatten());
+            // Perder el andén no es un cambio: se recuerda el último conocido.
+            if let Some(actual) = arribo.anden.clone() {
+                andenes.insert(clave, (actual, arribo.anden_anterior.clone()));
+            }
+        }
     }
 }
 
@@ -159,9 +185,16 @@ impl<P: PreferenciasRepo> Favoritos<P> {
     }
 
     /// Recuerda la Estación (y Ramal) abierta, sea o no un Favorito guardado. Si trae
-    /// coordenadas, se las completa a los Favoritos de esa Estación que no las tenían.
+    /// coordenadas o Ramales, se los completa a los Favoritos de esa Estación que no los
+    /// tenían.
     pub fn abrir(&self, favorito: Favorito) -> Result<Preferencias, StorageError> {
         self.modificar(|p| {
+            if !favorito.ramales.is_empty() {
+                p.favoritos
+                    .iter_mut()
+                    .filter(|f| f.estacion == favorito.estacion && f.ramales.is_empty())
+                    .for_each(|f| f.ramales = favorito.ramales.clone());
+            }
             if let Some(coordenadas) = favorito.coordenadas {
                 p.favoritos
                     .iter_mut()
@@ -343,8 +376,15 @@ impl<A: ArribosSource, N: Notificador, C: Clock> Seguimientos<A, N, C> {
                 else {
                     return false;
                 };
+                let mut arribo = arribo.clone();
+                if let Some(visto) = &seguimiento.ultimo_arribo {
+                    arribo.marcar_cambio_de_anden(
+                        visto.anden.as_deref(),
+                        visto.anden_anterior.clone(),
+                    );
+                }
                 seguimiento.ultimo_arribo = Some(arribo.clone());
-                for aviso in seguimiento.evaluar(arribo, ahora) {
+                for aviso in seguimiento.evaluar(&arribo, ahora) {
                     a_notificar.push((seguimiento.clone(), aviso));
                 }
                 true
@@ -354,5 +394,87 @@ impl<A: ArribosSource, N: Notificador, C: Clock> Seguimientos<A, N, C> {
             }
         }
         ultimo_error.map_or(Ok(()), Err)
+    }
+}
+
+/// Noticias del operador que corresponden a la Estación abierta. Se piden para toda la
+/// red y se guardan en memoria: cambian cada horas, no cada refresco de Arribos.
+pub struct Noticias<S, P, C> {
+    source: S,
+    repo: P,
+    reloj: C,
+    /// Cuándo se intentó pedirlas por última vez y las últimas que llegaron.
+    ultimas: Mutex<Option<(DateTime<Utc>, Vec<Noticia>)>>,
+}
+
+impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
+    pub fn new(source: S, repo: P, reloj: C) -> Self {
+        Self {
+            source,
+            repo,
+            reloj,
+            ultimas: Mutex::default(),
+        }
+    }
+
+    pub const REFRESCO_MINUTOS: i64 = 5;
+
+    /// Vigentes y de esa Estación, sus Ramales o su Línea, de la más grave a la menos.
+    /// Si la fuente falla quedan las últimas que llegaron; si nunca llegó ninguna, no hay.
+    pub async fn de_estacion(&self, estacion: EstacionId, ramales: &[RamalId]) -> Vec<Noticia> {
+        let ahora = self.reloj.ahora();
+        let todas = self.todas(ahora).await;
+        let descartadas = self
+            .repo
+            .cargar()
+            .map(|p| p.noticias_descartadas)
+            .unwrap_or_default();
+        let mut vistas: Vec<Noticia> = todas
+            .into_iter()
+            .filter(|n| n.aplica_a(estacion, ramales) && n.vigente(ahora))
+            .filter(|n| n.destacada() || !descartadas.contains(&n.id))
+            .collect();
+        vistas.sort_by_key(|n| n.criticidad.unwrap_or(u32::MAX));
+        vistas
+    }
+
+    async fn todas(&self, ahora: DateTime<Utc>) -> Vec<Noticia> {
+        let guardadas = self.ultimas.lock().unwrap().clone();
+        if let Some((consultada, noticias)) = &guardadas {
+            if ahora - *consultada < Duration::minutes(Self::REFRESCO_MINUTOS) {
+                return noticias.clone();
+            }
+        }
+        let noticias = match self.source.noticias().await {
+            Ok(noticias) => {
+                self.olvidar_descartadas_ausentes(&noticias);
+                noticias
+            }
+            Err(_) => guardadas.map(|(_, n)| n).unwrap_or_default(),
+        };
+        *self.ultimas.lock().unwrap() = Some((ahora, noticias.clone()));
+        noticias
+    }
+
+    /// Las Noticias destacadas se siguen mostrando aunque se hayan descartado.
+    pub fn descartar(&self, id: u64) -> Result<Preferencias, StorageError> {
+        let mut preferencias = self.repo.cargar()?;
+        preferencias.noticias_descartadas.insert(id);
+        self.repo.guardar(&preferencias)?;
+        Ok(preferencias)
+    }
+
+    /// Así la lista de descartadas no crece para siempre.
+    fn olvidar_descartadas_ausentes(&self, publicadas: &[Noticia]) {
+        let Ok(mut preferencias) = self.repo.cargar() else {
+            return;
+        };
+        let antes = preferencias.noticias_descartadas.len();
+        preferencias
+            .noticias_descartadas
+            .retain(|id| publicadas.iter().any(|n| n.id == *id));
+        if preferencias.noticias_descartadas.len() != antes {
+            let _ = self.repo.guardar(&preferencias);
+        }
     }
 }

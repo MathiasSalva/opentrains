@@ -14,6 +14,7 @@
     type Favorito,
     type Instalaciones,
     type Linea,
+    type Noticia,
     type Preferencias,
     type Ramal,
   } from "$lib/api";
@@ -36,6 +37,7 @@
   import FilaChips from "$lib/components/FilaChips.svelte";
   import Hoja from "$lib/components/Hoja.svelte";
   import DetalleServicio from "$lib/components/DetalleServicio.svelte";
+  import NoticiasEstacion from "$lib/components/NoticiasEstacion.svelte";
   import { detalle } from "$lib/detalle.svelte";
   import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
   import { recargarSeguimientos, seguimientos } from "$lib/seguimientos.svelte";
@@ -59,6 +61,7 @@
 
   let actual = $state<Favorito | null>(null);
   let arribos = $state<Arribo[]>([]);
+  let noticias = $state<Noticia[]>([]);
   let ultimaActualizacion = $state<number | null>(null);
   let errorArribos = $state<string | null>(null);
   let fuenteCambiada = $state(false);
@@ -147,6 +150,8 @@
       estacion_nombre: estacion.nombre,
       ramal: soloEsteRamal ? ramal : null,
       coordenadas: coordenadas(estacion),
+      // Catálogos guardados antes de saber los Ramales de cada Estación: al menos este.
+      ramales: estacion.ramales?.length ? estacion.ramales : ramal ? [ramal.id] : [],
     });
   }
 
@@ -155,6 +160,7 @@
     detalle.clave = null;
     seguimientos.estacion = { id: favorito.estacion, nombre: favorito.estacion_nombre };
     arribos = [];
+    noticias = [];
     ultimaActualizacion = null;
     errorArribos = null;
     instalaciones = undefined;
@@ -162,6 +168,9 @@
     try {
       preferencias = await api.abrir($state.snapshot(favorito));
       seguimientos.anticipaciones = preferencias.anticipaciones ?? {};
+      // El backend completa coordenadas y Ramales de Favoritos viejos.
+      const completo = preferencias.ultimo_abierto;
+      if (completo && actual && mismoFavorito(completo, actual)) actual = completo;
     } catch (e) {
       // Recordar el último abierto es una comodidad: no bloquea la consulta.
       console.warn(describirError(e));
@@ -173,6 +182,7 @@
     if (!actual) return;
     const consulta = ++ultimaConsulta;
     cargando = true;
+    refrescarNoticias(consulta);
     try {
       const nuevos = await api.arribos($state.snapshot(actual));
       if (consulta !== ultimaConsulta) return;
@@ -187,6 +197,26 @@
       fuenteCambiada = esFuenteCambiada(e);
     } finally {
       if (consulta === ultimaConsulta) cargando = false;
+    }
+  }
+
+  // Las Noticias no bloquean ni ensucian los Arribos: si fallan, quedan las últimas.
+  async function refrescarNoticias(consulta: number) {
+    if (!actual) return;
+    try {
+      const nuevas = await api.noticias($state.snapshot(actual));
+      if (consulta === ultimaConsulta) noticias = nuevas;
+    } catch (e) {
+      console.warn(describirError(e));
+    }
+  }
+
+  async function descartarNoticia(id: number) {
+    noticias = noticias.filter((n) => n.id !== id);
+    try {
+      preferencias = await api.descartarNoticia(id);
+    } catch (e) {
+      console.warn(describirError(e));
     }
   }
 
@@ -255,6 +285,7 @@
       estacion_nombre: estacion.nombre,
       ramal: null,
       coordenadas: coordenadas(estacion),
+      ramales: estacion.ramales ?? [],
     });
   }
 
@@ -520,6 +551,12 @@
         {/if}
       </div>
 
+      {#if noticias.length > 0}
+        <div class="noticias">
+          <NoticiasEstacion {noticias} descartar={descartarNoticia} />
+        </div>
+      {/if}
+
       {#if ultimaActualizacion === null && cargando}
         <SkeletonArribos />
       {:else if ultimaActualizacion !== null && arribos.length === 0}
@@ -774,6 +811,11 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  .noticias {
+    display: grid;
+    gap: 6px;
   }
 
   /* Avisos: neutros salvo los errores, que van en rojo. El ámbar es de "Demorado". */

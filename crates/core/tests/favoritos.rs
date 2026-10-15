@@ -25,6 +25,7 @@ fn favorito(estacion: u32, ramal: Option<u32>) -> Favorito {
             nombre: format!("Ramal {id}"),
         }),
         coordenadas: None,
+        ramales: vec![],
     }
 }
 
@@ -108,6 +109,26 @@ fn abrir_una_estacion_con_coordenadas_completa_los_favoritos_que_no_las_tenian()
         .map(|f| f.coordenadas)
         .collect();
     assert_eq!(coordenadas, vec![Some(RETIRO), Some(RETIRO), None]);
+}
+
+#[test]
+fn abrir_una_estacion_con_sus_ramales_se_los_completa_a_los_favoritos_que_no_los_tenian() {
+    // Los Favoritos guardados antes de las Noticias no saben qué Ramales pasan.
+    let repo = FakeRepo::default();
+    let favoritos = Favoritos::new(&repo);
+    favoritos.agregar(favorito(463, Some(131))).unwrap();
+    favoritos.agregar(favorito(293, None)).unwrap();
+
+    let mut abierta = favorito(463, None);
+    abierta.ramales = vec![RamalId(31), RamalId(65), RamalId(131)];
+    let preferencias = favoritos.abrir(abierta).unwrap();
+
+    let ramales: Vec<_> = preferencias
+        .favoritos
+        .iter()
+        .map(|f| f.ramales.len())
+        .collect();
+    assert_eq!(ramales, vec![3, 0]);
 }
 
 #[test]

@@ -23,12 +23,14 @@ fn preferencias() -> Preferencias {
             latitud: -34.5888579,
             longitud: -58.3741843,
         }),
+        ramales: vec![RamalId(31), RamalId(65), RamalId(131)],
     };
     Preferencias {
         favoritos: vec![retiro.clone()],
         ultimo_abierto: Some(retiro),
         anticipaciones: [(EstacionId(463), 12), (EstacionId(93), 5)].into(),
         aviso_ubicacion_oculto: true,
+        noticias_descartadas: [98433, 7001].into(),
     }
 }
 

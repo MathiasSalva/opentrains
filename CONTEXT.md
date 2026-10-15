@@ -55,6 +55,18 @@ _Avoid_: Tono, status
 **Servicio cancelado**:
 Servicio que el operador marcó con una cancelación; se sigue mostrando, señalado como tal.
 
+**Noticia**:
+Texto que publica el operador sobre una Línea entera, un Ramal o una Estación, con una criticidad y un período de vigencia (ej. un corte por obras, un beneficio de pasaje).
+_Avoid_: Alerta, comunicado, aviso (Aviso es lo que notifica la app)
+
+**Noticia del Servicio**:
+Texto suelto que el operador adjunta a un Servicio concreto; no tiene criticidad ni vigencia propias, dura lo que dura el Servicio.
+_Avoid_: Leyenda, nota
+
+**Cambio de andén**:
+Cuando un Arribo que ya tenía andén pasa a tener otro distinto. Que se le asigne andén por primera vez, o que lo pierda, no es un Cambio de andén.
+_Avoid_: Reasignación
+
 **Servicio oculto**:
 Servicio que el operador marcó para no mostrarse al público; nunca se le presenta al usuario.
 

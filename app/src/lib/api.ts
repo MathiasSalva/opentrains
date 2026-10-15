@@ -3,7 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface Linea { id: number; nombre: string }
 export interface Ramal { id: number; nombre: string }
-export interface Estacion { id: number; nombre: string; orden: number; latitud: number; longitud: number }
+export interface Estacion {
+  id: number;
+  nombre: string;
+  orden: number;
+  latitud: number;
+  longitud: number;
+  /** Ramales que pasan por la Estación; vacío en catálogos guardados antes de saberlo. */
+  ramales?: number[];
+}
 
 export interface Coordenadas { latitud: number; longitud: number }
 
@@ -13,6 +21,8 @@ export interface Favorito {
   ramal: Ramal | null;
   /** Ausentes en Favoritos guardados antes de que existieran las distancias. */
   coordenadas?: Coordenadas | null;
+  /** Ramales que pasan por la Estación, para sus Noticias. */
+  ramales?: number[];
 }
 
 export interface Preferencias {
@@ -22,6 +32,14 @@ export interface Preferencias {
   anticipaciones?: Record<string, number>;
   /** El usuario cerró el aviso de Ubicación desactivada. */
   aviso_ubicacion_oculto?: boolean;
+}
+
+/** Noticia del operador para la Estación abierta. */
+export interface Noticia {
+  id: number;
+  texto: string;
+  /** Se muestra entera y no se puede descartar. */
+  destacada: boolean;
 }
 
 export interface EstacionCercana { estacion: Estacion; distancia: string }
@@ -43,6 +61,10 @@ export interface Arribo {
   situacion: Situacion;
   formacion: string | null;
   anden: string | null;
+  /** Si hubo un Cambio de andén, el andén que tenía antes. */
+  anden_anterior: string | null;
+  /** Noticia del Servicio. */
+  noticia: string | null;
   programada: string;
   demora_minutos: number | null;
   momento: string;
@@ -98,6 +120,8 @@ export const api = {
   ramales: (linea: number) => invoke<Ramal[]>("ramales", { linea }),
   estaciones: (ramal: number) => invoke<Estacion[]>("estaciones", { ramal }),
   arribos: (favorito: Favorito) => invoke<Arribo[]>("arribos", { favorito }),
+  noticias: (favorito: Favorito) => invoke<Noticia[]>("noticias", { favorito }),
+  descartarNoticia: (id: number) => invoke<Preferencias>("descartar_noticia", { id }),
   instalaciones: (estacion: number) => invoke<Instalaciones | null>("instalaciones", { estacion }),
   preferencias: () => invoke<Preferencias>("preferencias"),
   agregarFavorito: (favorito: Favorito) => invoke<Preferencias>("agregar_favorito", { favorito }),

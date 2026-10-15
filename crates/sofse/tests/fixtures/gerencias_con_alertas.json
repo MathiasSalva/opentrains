@@ -1,0 +1,26 @@
+[
+  {"id": 11, "id_empresa": 1, "nombre": "Roca",
+   "estado": {"id": 13, "mensaje": "Alertas por ramal", "color": "#435a6c"},
+   "alerta": [
+     {"id": 98433, "linea_id": 11, "ramal_id": null, "estacion_id": null, "sentido": null,
+      "causa_gtfs": "OTHER_CAUSE", "efecto_gtfs": "OTHER_EFFECT", "icono_fontawesome": "fa-warning",
+      "contenido": "Las personas con CUD pueden viajar en tren sin costo con SUBE.   ",
+      "habilitado": 1, "vigencia_desde": "2026-10-13 00:01:00", "vigencia_hasta": null,
+      "criticidad_orden": 4, "criticidad_color_fondo": "#dff0d8", "criticidad_color_texto": "#3c763d"}
+   ]},
+  {"id": 31, "id_empresa": 1, "nombre": "San Martín",
+   "estado": {"id": 13, "mensaje": "Alertas por ramal", "color": "#435a6c"},
+   "alerta": [
+     {"id": 7001, "linea_id": 31, "ramal_id": 65, "estacion_id": null, "sentido": 1,
+      "contenido": "Servicio limitado a Hurlingham por obras.",
+      "habilitado": 1, "vigencia_desde": "2026-10-15 05:00:00", "vigencia_hasta": "2026-10-15 23:30:00",
+      "criticidad_orden": 2},
+     {"id": 7002, "linea_id": 31, "ramal_id": null, "estacion_id": 463, "sentido": null,
+      "contenido": "Ascensor del andén 3 fuera de servicio.",
+      "habilitado": 0, "vigencia_desde": null, "vigencia_hasta": null,
+      "criticidad_orden": null},
+     {"linea_id": 31, "contenido": "Sin id: no se puede descartar ni reconocer"}
+   ]},
+  {"id": 501, "id_empresa": 1, "nombre": "Regionales",
+   "estado": {"id": 1, "mensaje": "Normal", "color": "#000"}, "alerta": []}
+]

@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::dominio::{
-    Arribo, Aviso, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Preferencias,
-    Ramal, RamalId, Seguimiento,
+    Arribo, Aviso, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Noticia,
+    Preferencias, Ramal, RamalId, Seguimiento,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize)]
@@ -53,6 +53,12 @@ pub trait InstalacionesSource {
 #[allow(async_fn_in_trait)]
 pub trait EstacionesCercanasSource {
     async fn estaciones_cercanas(&self, desde: Coordenadas) -> Result<Vec<Estacion>, SourceError>;
+}
+
+/// Todas las Noticias que el operador publica hoy, de toda la red.
+#[allow(async_fn_in_trait)]
+pub trait NoticiasSource {
+    async fn noticias(&self) -> Result<Vec<Noticia>, SourceError>;
 }
 
 /// La Ubicación del dispositivo. `None` si está desactivada, denegada o no hay señal:
@@ -176,5 +182,11 @@ impl<T: EstacionesCercanasSource> EstacionesCercanasSource for std::sync::Arc<T>
 impl<T: UbicacionSource> UbicacionSource for std::sync::Arc<T> {
     async fn ubicacion(&self) -> Option<Coordenadas> {
         (**self).ubicacion().await
+    }
+}
+
+impl<T: NoticiasSource> NoticiasSource for std::sync::Arc<T> {
+    async fn noticias(&self) -> Result<Vec<Noticia>, SourceError> {
+        (**self).noticias().await
     }
 }

@@ -43,7 +43,10 @@
     </span>
     <span class="dato">
       <span class="dt">Andén</span>
-      <span class="dd anden" class:sin-asignar={!arribo.anden}>{arribo.anden ?? "Sin asignar"}</span>
+      <span class="dd anden" class:sin-asignar={!arribo.anden} class:cambio={arribo.anden_anterior !== null}>
+        {arribo.anden ?? "Sin asignar"}
+        {#if arribo.anden && arribo.anden_anterior}<span class="antes">antes {arribo.anden_anterior}</span>{/if}
+      </span>
     </span>
     <span class="dato">
       <span class="dt">Servicio</span>
@@ -186,6 +189,15 @@
     font-size: var(--t-cuerpo);
     font-weight: 500;
     color: var(--texto-tenue);
+  }
+  /* Cambio de andén: color de atención, nunca uno de Situación. */
+  .anden.cambio {
+    color: color-mix(in srgb, var(--atencion) 82%, var(--texto));
+  }
+  .antes {
+    font-family: var(--fuente);
+    font-size: var(--t-meta);
+    font-weight: 500;
   }
   .sit-cancelado .valor {
     text-decoration: line-through;

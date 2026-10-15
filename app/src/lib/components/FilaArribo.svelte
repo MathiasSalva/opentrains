@@ -5,6 +5,7 @@
   import { cuentaRegresiva, hora } from "$lib/formato";
   import SituacionPill from "./SituacionPill.svelte";
   import BotonAvisar from "./BotonAvisar.svelte";
+  import Insignia from "./Insignia.svelte";
 
   let { arribo, ahora }: { arribo: Arribo; ahora: number } = $props();
 
@@ -22,7 +23,11 @@
       <span class="meta">
         <span class:estimada={demorado}>{hora(arribo.momento)}</span>
         {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
-        {#if arribo.anden}<span>andén {arribo.anden}</span>{/if}
+        {#if arribo.anden}
+          <Insignia atencion={arribo.anden_anterior !== null}>
+            andén {arribo.anden}{#if arribo.anden_anterior}<span class="antes">, antes {arribo.anden_anterior}</span>{/if}
+          </Insignia>
+        {/if}
       </span>
     </span>
     <SituacionPill {arribo} {ahora} compacta />
@@ -98,7 +103,8 @@
   .meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 6px;
+    align-items: center;
+    gap: 2px 6px;
     white-space: nowrap;
     font-size: var(--t-meta);
     color: var(--texto-suave);
@@ -110,6 +116,9 @@
   }
   s {
     color: var(--texto-tenue);
+  }
+  .antes {
+    font-weight: 400;
   }
   /* En el celular (o un panel angosto) la Situación queda en ícono y color. */
   @container fila (max-width: 340px) {

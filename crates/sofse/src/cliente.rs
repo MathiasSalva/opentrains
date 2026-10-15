@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use chrono::{NaiveDate, Utc};
 use opentrains_core::dominio::{
-    Arribo, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Ramal, RamalId,
+    Arribo, Coordenadas, Estacion, EstacionId, Instalaciones, Linea, LineaId, Noticia, Ramal,
+    RamalId,
 };
 use opentrains_core::puertos::{
-    ArribosSource, CatalogoSource, EstacionesCercanasSource, InstalacionesSource, SourceError,
+    ArribosSource, CatalogoSource, EstacionesCercanasSource, InstalacionesSource, NoticiasSource,
+    SourceError,
 };
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -177,6 +179,23 @@ impl ArribosSource for SofseClient {
         }
         let json = self.get_autenticado(&ruta).await?;
         mapeo::arribos(&json, Utc::now())
+    }
+}
+
+impl NoticiasSource for SofseClient {
+    /// Las gerencias traen las alertas de cada Línea; los Ramales de cada Línea, las suyas
+    /// y con qué Ramales expresar una alerta de toda la Línea. No pasa por la caché del
+    /// catálogo: las Noticias cambian en horas, no en días.
+    async fn noticias(&self) -> Result<Vec<Noticia>, SourceError> {
+        let gerencias = self
+            .get_autenticado("infraestructura/gerencias?idEmpresa=1")
+            .await?;
+        let mut ramales = vec![];
+        for linea in mapeo::lineas(&gerencias)? {
+            let ruta = format!("infraestructura/ramales?idGerencia={}", linea.id.0);
+            ramales.push(self.get_autenticado(&ruta).await?);
+        }
+        mapeo::noticias(&gerencias, &ramales)
     }
 }
 

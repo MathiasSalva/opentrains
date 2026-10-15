@@ -30,8 +30,10 @@ fn arribo(numero: u32, momento: DateTime<Utc>) -> Arribo {
             formacion: None,
             cancelado: false,
             oculto: false,
+            noticia: None,
         },
         anden: None,
+        anden_anterior: None,
         programada: momento,
         estimada: None,
         momento,
@@ -241,4 +243,36 @@ fn seguir_de_nuevo_reemplaza_y_dejar_de_seguir_lo_quita() {
 
     s.dejar_de_seguir(RETIRO, 3907);
     assert!(s.activos().is_empty());
+}
+
+#[tokio::test]
+async fn el_servicio_seguido_recuerda_su_cambio_de_anden() {
+    let e = Escenario::new("2026-10-13T10:00:00Z");
+    let seguimientos = e.seguimientos();
+    seguimientos.seguir(seguir_3907(5));
+    let en_anden = |anden: Option<&str>| Arribo {
+        anden: anden.map(Into::into),
+        ..arribo(3907, t("2026-10-13T10:30:00Z"))
+    };
+    let anterior = || {
+        seguimientos.activos()[0]
+            .ultimo_arribo
+            .clone()
+            .unwrap()
+            .anden_anterior
+    };
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("2"))]);
+    seguimientos.revisar().await.unwrap();
+    assert_eq!(anterior(), None);
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("4"))]);
+    seguimientos.revisar().await.unwrap();
+    assert_eq!(anterior(), Some("2".into()));
+
+    e.fuente.poner(RETIRO, vec![en_anden(None)]);
+    seguimientos.revisar().await.unwrap();
+    e.fuente.poner(RETIRO, vec![en_anden(Some("4"))]);
+    seguimientos.revisar().await.unwrap();
+    assert_eq!(anterior(), Some("2".into()));
 }

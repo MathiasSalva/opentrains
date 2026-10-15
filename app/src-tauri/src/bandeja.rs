@@ -213,6 +213,9 @@ pub fn texto(i: &Indicador) -> String {
     );
     if let (Some(anden), false) = (&a.anden, i.situacion == Situacion::Cancelado) {
         texto.push_str(&format!(". Andén {anden}"));
+        if a.anden_anterior.is_some() {
+            texto.push_str(" (cambió)");
+        }
     }
     if i.seguido {
         texto.push_str(" 🔔");

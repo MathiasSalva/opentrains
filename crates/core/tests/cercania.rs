@@ -19,6 +19,7 @@ fn estacion(id: u32, nombre: &str, en: Coordenadas) -> Estacion {
         orden: 1,
         latitud: en.latitud,
         longitud: en.longitud,
+        ramales: vec![],
     }
 }
 

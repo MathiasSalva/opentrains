@@ -51,6 +51,7 @@
         "ramal": {"id": 65, "nombre": "Retiro-Cabred"},
         "gerencia": {"id": 31, "nombre": "San Martín"},
         "cancelacion": {"motivo": "Falta de personal"},
+        "leyenda": "  Circula con 4 coches ",
         "equipo": {"id": 71, "nombre": "B965", "esElectrico": 0, "gpss": []},
         "oculto": false,
         "sentido": 2,
@@ -69,6 +70,7 @@
       "servicio": {
         "numero": 9999,
         "ramal": {"id": 131, "nombre": "Retiro-Junín"},
+        "leyenda": "   ",
         "cancelacion": null,
         "equipo": null,
         "oculto": true,

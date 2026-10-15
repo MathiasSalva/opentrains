@@ -5,8 +5,8 @@
   import SituacionPill from "./SituacionPill.svelte";
   import BotonAvisar from "./BotonAvisar.svelte";
 
-  // Lo que se sabe de un Servicio en la Estación abierta. Acá va a sumarse el recorrido
-  // parada por parada cuando exista.
+  // Lo que se sabe de un Servicio en la Estación abierta, con su Noticia si la trae. Acá
+  // va a sumarse el recorrido parada por parada cuando exista.
   let { arribo, ahora }: { arribo: Arribo; ahora: number } = $props();
 
   const clase = $derived(claseSituacion(arribo, ahora));
@@ -33,11 +33,18 @@
       {#if demorado}<span class="tenue">programado {hora(arribo.programada)}, +{arribo.demora_minutos} min</span>{/if}
     </dd>
     <dt>Andén</dt>
-    <dd>{arribo.anden ?? "Sin asignar"}</dd>
+    <dd class:cambio={arribo.anden !== null && arribo.anden_anterior !== null}>
+      {arribo.anden ?? "Sin asignar"}
+      {#if arribo.anden && arribo.anden_anterior}<span class="tenue">cambió, antes {arribo.anden_anterior}</span>{/if}
+    </dd>
     <dt>Formación</dt>
     <dd>{arribo.formacion ?? "Sin informar"}</dd>
     <dt>Estado</dt>
     <dd>{arribo.estado}</dd>
+    {#if arribo.noticia}
+      <dt>Noticia</dt>
+      <dd>{arribo.noticia}</dd>
+    {/if}
   </dl>
 </div>
 
@@ -93,5 +100,8 @@
     font-size: var(--t-meta);
     font-weight: 400;
     color: var(--texto-tenue);
+  }
+  .cambio {
+    color: color-mix(in srgb, var(--atencion) 82%, var(--texto));
   }
 </style>

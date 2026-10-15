@@ -26,8 +26,10 @@ fn arribo(numero: u32, momento: &str) -> Arribo {
             formacion: Some("B953".into()),
             cancelado: false,
             oculto: false,
+            noticia: None,
         },
         anden: Some("3".into()),
+        anden_anterior: None,
         programada: t(momento),
         estimada: None,
         momento: t(momento),
@@ -59,6 +61,7 @@ fn retiro_a_pilar() -> Favorito {
             nombre: "Retiro-Junín".into(),
         }),
         coordenadas: None,
+        ramales: vec![],
     }
 }
 

@@ -1,6 +1,6 @@
 //! Tipos del dominio. Ver `CONTEXT.md` para el glosario.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use chrono::{DateTime, Utc};
@@ -35,6 +35,9 @@ pub struct Estacion {
     pub orden: u32,
     pub latitud: f64,
     pub longitud: f64,
+    /// Ramales que pasan por la Estación; vacío en catálogos guardados antes de saberlo.
+    #[serde(default)]
+    pub ramales: Vec<RamalId>,
 }
 
 impl Estacion {
@@ -124,12 +127,18 @@ pub struct Servicio {
     pub formacion: Option<String>,
     pub cancelado: bool,
     pub oculto: bool,
+    /// Noticia del Servicio, si el operador le adjuntó una.
+    #[serde(default)]
+    pub noticia: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Arribo {
     pub servicio: Servicio,
     pub anden: Option<String>,
+    /// Si hubo un Cambio de andén mientras se lo veía, el andén que tenía antes.
+    #[serde(default)]
+    pub anden_anterior: Option<String>,
     pub programada: DateTime<Utc>,
     pub estimada: Option<DateTime<Utc>>,
     /// Momento en que el Servicio llega (o sale) de la Estación, según el operador.
@@ -141,6 +150,16 @@ impl Arribo {
     pub fn demora_minutos(&self) -> Option<i64> {
         let minutos = (self.estimada? - self.programada).num_minutes();
         (minutos >= 1).then_some(minutos)
+    }
+
+    /// Marca el Cambio de andén según cómo se vio antes este Arribo: `conocido` es el
+    /// último andén que se le conoció y `anterior`, el cambio que ya tenía marcado.
+    /// Que se le asigne andén o lo pierda no es un cambio: queda el que ya estaba marcado.
+    pub fn marcar_cambio_de_anden(&mut self, conocido: Option<&str>, anterior: Option<String>) {
+        self.anden_anterior = match (&self.anden, conocido) {
+            (Some(actual), Some(conocido)) if actual != conocido => Some(conocido.to_owned()),
+            _ => anterior,
+        };
     }
 
     /// Prioridad: cancelado > en andén > demorado > estado informado.
@@ -258,6 +277,56 @@ impl Seguimiento {
     }
 }
 
+/// Texto que publica el operador sobre una Línea, un Ramal o una Estación.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Noticia {
+    pub id: u64,
+    pub alcance: AlcanceNoticia,
+    pub texto: String,
+    /// Cuanto más bajo, más grave; `None` si el operador no la informa.
+    pub criticidad: Option<u32>,
+    pub habilitada: bool,
+    pub desde: Option<DateTime<Utc>>,
+    /// `None`: vigente sin fecha de fin.
+    pub hasta: Option<DateTime<Utc>>,
+}
+
+/// A qué parte de la red se refiere una Noticia.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "tipo", content = "id", rename_all = "snake_case")]
+pub enum AlcanceNoticia {
+    /// Toda una Línea, expresada como sus Ramales.
+    Linea(Vec<RamalId>),
+    Ramal(RamalId),
+    Estacion(EstacionId),
+}
+
+impl Noticia {
+    /// Hasta esta criticidad la Noticia se muestra entera y no se puede descartar.
+    pub const CRITICIDAD_DESTACADA: u32 = 2;
+
+    pub fn destacada(&self) -> bool {
+        self.criticidad
+            .is_some_and(|c| c <= Self::CRITICIDAD_DESTACADA)
+    }
+
+    /// Habilitada y dentro de su período de vigencia.
+    pub fn vigente(&self, ahora: DateTime<Utc>) -> bool {
+        self.habilitada
+            && self.desde.is_none_or(|desde| desde <= ahora)
+            && self.hasta.is_none_or(|hasta| ahora < hasta)
+    }
+
+    /// Si corresponde mostrarla en una Estación vista con esos Ramales.
+    pub fn aplica_a(&self, estacion: EstacionId, ramales: &[RamalId]) -> bool {
+        match &self.alcance {
+            AlcanceNoticia::Linea(de_la_linea) => de_la_linea.iter().any(|r| ramales.contains(r)),
+            AlcanceNoticia::Ramal(ramal) => ramales.contains(ramal),
+            AlcanceNoticia::Estacion(id) => *id == estacion,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Instalaciones {
     pub direccion: Option<String>,
@@ -279,6 +348,10 @@ pub struct Favorito {
     /// Ausentes en Favoritos guardados antes de que existieran las distancias.
     #[serde(default)]
     pub coordenadas: Option<Coordenadas>,
+    /// Ramales que pasan por la Estación, para saber qué Noticias le corresponden.
+    /// Vacío en Favoritos guardados antes de las Noticias.
+    #[serde(default)]
+    pub ramales: Vec<RamalId>,
 }
 
 impl Favorito {
@@ -298,4 +371,7 @@ pub struct Preferencias {
     /// El usuario cerró el aviso de que la Ubicación está desactivada.
     #[serde(default)]
     pub aviso_ubicacion_oculto: bool,
+    /// Noticias que el usuario descartó, por id.
+    #[serde(default)]
+    pub noticias_descartadas: BTreeSet<u64>,
 }

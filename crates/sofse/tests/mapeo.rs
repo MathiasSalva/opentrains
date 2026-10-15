@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use opentrains_core::dominio::{
-    Arribo, Estacion, EstacionId, EstadoServicio, Instalaciones, Linea, LineaId, Ramal, RamalId,
-    Servicio,
+    AlcanceNoticia, Arribo, Estacion, EstacionId, EstadoServicio, Instalaciones, Linea, LineaId,
+    Noticia, Ramal, RamalId, Servicio,
 };
 use opentrains_sofse::{credencial, mapeo};
 
@@ -72,6 +72,7 @@ fn las_estaciones_se_ordenan_por_orden_y_convierten_sus_campos_de_texto() {
                 orden: 1,
                 latitud: -34.5888579,
                 longitud: -58.3741843,
+                ramales: vec![RamalId(31), RamalId(65), RamalId(131)],
             },
             Estacion {
                 id: EstacionId(297),
@@ -79,6 +80,7 @@ fn las_estaciones_se_ordenan_por_orden_y_convierten_sus_campos_de_texto() {
                 orden: 2,
                 latitud: -34.5781,
                 longitud: -58.4278,
+                ramales: vec![RamalId(31), RamalId(65), RamalId(131)],
             },
         ]
     );
@@ -111,8 +113,10 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                     formacion: Some("B953".into()),
                     cancelado: false,
                     oculto: false,
+                    noticia: None,
                 },
                 anden: Some("3".into()),
+                anden_anterior: None,
                 programada: t("2026-10-13T00:48:00Z"),
                 estimada: None,
                 momento: t("2026-10-13T00:50:00Z"),
@@ -132,8 +136,10 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                     formacion: Some("B965".into()),
                     cancelado: true,
                     oculto: false,
+                    noticia: Some("Circula con 4 coches".into()),
                 },
                 anden: Some("2".into()),
+                anden_anterior: None,
                 programada: t("2026-10-13T01:04:00Z"),
                 estimada: Some(t("2026-10-13T01:08:30Z")),
                 momento: t("2026-10-13T01:10:30Z"),
@@ -153,8 +159,10 @@ fn los_arribos_toman_horario_destino_estado_y_momento_de_la_respuesta() {
                     formacion: None,
                     cancelado: false,
                     oculto: true,
+                    noticia: None,
                 },
                 anden: None,
+                anden_anterior: None,
                 programada: t("2026-10-13T01:20:00Z"),
                 estimada: None,
                 momento: t("2026-10-13T01:10:00Z"),
@@ -230,6 +238,75 @@ fn las_estaciones_cercanas_conservan_el_orden_de_la_api() {
             orden: 1,
             latitud: -34.5888579,
             longitud: -58.3741843,
+            ramales: vec![RamalId(31), RamalId(65), RamalId(131)],
         }
+    );
+}
+
+#[test]
+fn las_alertas_de_lineas_y_ramales_son_noticias() {
+    let ramales_roca = r#"[
+        {"id": 17, "nombre": "Constitución-Alejandro Korn", "id_gerencia": 11, "alerta": null},
+        {"id": 19, "nombre": "Constitución-Ezeiza", "id_gerencia": 11, "alerta": null}
+    ]"#;
+    // La forma de la alerta de un Ramal no se vio con datos: se asume la misma que la de
+    // una Línea, y puede venir sola o en lista. Una alerta repetida se toma una vez.
+    let ramales_san_martin = r#"[
+        {"id": 131, "nombre": "Retiro-Junín", "id_gerencia": 31,
+         "alerta": {"id": 7003, "linea_id": 31, "ramal_id": 131, "estacion_id": null,
+                    "contenido": "Demoras por arrollamiento.", "habilitado": 1,
+                    "vigencia_desde": "2026-10-15 09:12:00", "vigencia_hasta": null, "criticidad_orden": 1}},
+        {"id": 65, "nombre": "Retiro-Cabred", "id_gerencia": 31,
+         "alerta": [{"id": 7001, "linea_id": 31, "ramal_id": 65, "contenido": "Servicio limitado a Hurlingham por obras.",
+                     "habilitado": 1, "criticidad_orden": 2}]}
+    ]"#;
+
+    let noticias = mapeo::noticias(
+        &fixture("gerencias_con_alertas.json"),
+        &[ramales_roca.into(), ramales_san_martin.into()],
+    )
+    .unwrap();
+
+    assert_eq!(
+        noticias,
+        vec![
+            Noticia {
+                id: 98433,
+                alcance: AlcanceNoticia::Linea(vec![RamalId(17), RamalId(19)]),
+                texto: "Las personas con CUD pueden viajar en tren sin costo con SUBE.".into(),
+                criticidad: Some(4),
+                habilitada: true,
+                // La vigencia viene en hora argentina.
+                desde: Some(t("2026-10-13T03:01:00Z")),
+                hasta: None,
+            },
+            Noticia {
+                id: 7001,
+                alcance: AlcanceNoticia::Ramal(RamalId(65)),
+                texto: "Servicio limitado a Hurlingham por obras.".into(),
+                criticidad: Some(2),
+                habilitada: true,
+                desde: Some(t("2026-10-15T08:00:00Z")),
+                hasta: Some(t("2026-10-16T02:30:00Z")),
+            },
+            Noticia {
+                id: 7002,
+                alcance: AlcanceNoticia::Estacion(EstacionId(463)),
+                texto: "Ascensor del andén 3 fuera de servicio.".into(),
+                criticidad: None,
+                habilitada: false,
+                desde: None,
+                hasta: None,
+            },
+            Noticia {
+                id: 7003,
+                alcance: AlcanceNoticia::Ramal(RamalId(131)),
+                texto: "Demoras por arrollamiento.".into(),
+                criticidad: Some(1),
+                habilitada: true,
+                desde: Some(t("2026-10-15T12:12:00Z")),
+                hasta: None,
+            },
+        ]
     );
 }

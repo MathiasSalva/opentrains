@@ -48,6 +48,7 @@ impl CatalogoSource for &FakeSource {
             orden: 1,
             latitud: -34.58,
             longitud: -58.37,
+            ramales: vec![RamalId(131)],
         }])
     }
 }

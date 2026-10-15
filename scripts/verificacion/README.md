@@ -9,8 +9,8 @@ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333 npm run tauri
 
 - `node cdp.mjs "<expresión JS>"`: evalúa en la ventana (p. ej. `document.body.innerText`).
 - `node shot.mjs captura.png`: captura de la ventana.
-- `node estados.mjs captura.png light|dark`: intercepta `ipc.localhost/arribos` (Fetch de CDP)
-  con todas las Situaciones de ejemplo y captura. `__TAURI_INTERNALS__.invoke` no se puede pisar.
+- `node estados.mjs captura.png light|dark`: intercepta `ipc.localhost/arribos` y `/noticias` (Fetch de CDP)
+  con todas las Situaciones, un Cambio de andén y Noticias de ejemplo, y captura. `__TAURI_INTERNALS__.invoke` no se puede pisar.
 - `flujo.js`: pegar en `cdp.mjs` para elegir Línea/Ramal/Estación desde los selects.
 
 Logs útiles en stderr: `[avisos]` (notificaciones) y `[bandeja]` (tooltip, solo debug).

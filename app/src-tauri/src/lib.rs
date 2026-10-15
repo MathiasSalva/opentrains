@@ -12,12 +12,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use opentrains_core::casos_de_uso::{Catalogo, Cercania, ConsultaArribos, Favoritos, Seguimientos};
+use opentrains_core::casos_de_uso::{
+    Catalogo, Cercania, ConsultaArribos, Favoritos, Noticias, Seguimientos,
+};
 use opentrains_core::dominio::{
-    Arribo, Coordenadas, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId,
+    Arribo, Coordenadas, Estacion, EstacionId, Favorito, Instalaciones, Linea, LineaId, Noticia,
     Preferencias, Ramal, RamalId, Seguimiento, Situacion,
 };
-use opentrains_core::puertos::{InstalacionesSource, SourceError, StorageError, SystemClock};
+use opentrains_core::puertos::{
+    EstacionesCercanasSource, InstalacionesSource, SourceError, StorageError, SystemClock,
+};
 use opentrains_sofse::SofseClient;
 use opentrains_storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -26,8 +30,11 @@ use tauri::{Manager, State};
 struct AppState {
     catalogo: Catalogo<Arc<SofseClient>, Arc<JsonStore>, SystemClock>,
     arribos: ConsultaArribos<Arc<SofseClient>>,
-    instalaciones: Arc<SofseClient>, // Sin lógica de dominio: el caso de uso sería un pasamanos.
+    /// Instalaciones y Ramales de una Estación: sin lógica de dominio, el caso de uso
+    /// sería un pasamanos.
+    sofse: Arc<SofseClient>,
     favoritos: Favoritos<Arc<JsonStore>>,
+    noticias: Noticias<Arc<SofseClient>, Arc<JsonStore>, SystemClock>,
     cercania: Cercania<ubicacion::UbicacionSistema, Arc<SofseClient>>,
     seguimientos: Arc<avisos::SeguimientosApp<tauri::Wry>>,
     /// Nombre y Arribos de la Estación abierta según el último refresco, para la bandeja.
@@ -65,6 +72,10 @@ struct ArriboVista {
     situacion: Situacion,
     formacion: Option<String>,
     anden: Option<String>,
+    /// Si hubo un Cambio de andén, el andén que tenía antes.
+    anden_anterior: Option<String>,
+    /// Noticia del Servicio.
+    noticia: Option<String>,
     programada: DateTime<Utc>,
     demora_minutos: Option<i64>,
     momento: DateTime<Utc>,
@@ -81,6 +92,8 @@ impl From<Arribo> for ArriboVista {
             estado: a.servicio.estado.nombre,
             formacion: a.servicio.formacion,
             anden: a.anden,
+            anden_anterior: a.anden_anterior,
+            noticia: a.servicio.noticia,
             programada: a.programada,
             momento: a.momento,
         }
@@ -114,12 +127,50 @@ async fn arribos(
     Ok(arribos.into_iter().map(ArriboVista::from).collect())
 }
 
+#[derive(Serialize)]
+struct NoticiaVista {
+    id: u64,
+    texto: String,
+    /// Se muestra entera y no se puede descartar.
+    destacada: bool,
+}
+
+impl From<Noticia> for NoticiaVista {
+    fn from(n: Noticia) -> Self {
+        Self {
+            destacada: n.destacada(),
+            id: n.id,
+            texto: n.texto,
+        }
+    }
+}
+
+/// Noticias de la Estación abierta: si el Favorito está acotado a un Ramal, las de ese
+/// Ramal; si no, las de todos los que pasan por la Estación.
+#[tauri::command]
+async fn noticias(
+    app: State<'_, AppState>,
+    favorito: Favorito,
+) -> Result<Vec<NoticiaVista>, AppError> {
+    let ramales = match &favorito.ramal {
+        Some(ramal) => vec![ramal.id],
+        None => favorito.ramales.clone(),
+    };
+    let noticias = app.noticias.de_estacion(favorito.estacion, &ramales).await;
+    Ok(noticias.into_iter().map(NoticiaVista::from).collect())
+}
+
+#[tauri::command]
+fn descartar_noticia(app: State<'_, AppState>, id: u64) -> Result<Preferencias, AppError> {
+    Ok(app.noticias.descartar(id)?)
+}
+
 #[tauri::command]
 async fn instalaciones(
     app: State<'_, AppState>,
     estacion: EstacionId,
 ) -> Result<Option<Instalaciones>, AppError> {
-    Ok(app.instalaciones.instalaciones(estacion).await?)
+    Ok(app.sofse.instalaciones(estacion).await?)
 }
 
 #[tauri::command]
@@ -142,13 +193,26 @@ fn quitar_favorito(app: State<'_, AppState>, favorito: Favorito) -> Result<Prefe
 
 #[tauri::command]
 async fn abrir(app: State<'_, AppState>, mut favorito: Favorito) -> Result<Preferencias, AppError> {
-    // Favoritos de antes de las distancias: las coordenadas salen del Ramal (en caché).
-    if let (None, Some(ramal)) = (favorito.coordenadas, &favorito.ramal) {
+    // Favoritos de antes de las distancias o de las Noticias: las coordenadas y los
+    // Ramales de la Estación salen del Ramal (en caché).
+    let incompleto = favorito.coordenadas.is_none() || favorito.ramales.is_empty();
+    if let (true, Some(ramal)) = (incompleto, &favorito.ramal) {
         if let Ok(estaciones) = app.catalogo.estaciones(ramal.id).await {
-            favorito.coordenadas = estaciones
-                .iter()
-                .find(|e| e.id == favorito.estacion)
-                .map(Estacion::coordenadas);
+            if let Some(estacion) = estaciones.iter().find(|e| e.id == favorito.estacion) {
+                favorito.coordenadas.get_or_insert(estacion.coordenadas());
+                if favorito.ramales.is_empty() {
+                    favorito.ramales = estacion.ramales.clone();
+                }
+            }
+        }
+    }
+    // Sin Ramal para buscarla en el catálogo: la Estación aparece entre las cercanas a
+    // sus propias coordenadas, y esa respuesta trae sus Ramales.
+    if let (true, Some(coordenadas)) = (favorito.ramales.is_empty(), favorito.coordenadas) {
+        if let Ok(cercanas) = app.sofse.estaciones_cercanas(coordenadas).await {
+            if let Some(estacion) = cercanas.iter().find(|e| e.id == favorito.estacion) {
+                favorito.ramales = estacion.ramales.clone();
+            }
         }
     }
     Ok(app.favoritos.abrir(favorito)?)
@@ -191,8 +255,8 @@ fn seguir(
         #[cfg(mobile)]
         {
             let handle = handle.clone();
-            let _ = tauri::async_runtime::spawn_blocking(move || avisos::pedir_permiso(&handle))
-                .await;
+            let _ =
+                tauri::async_runtime::spawn_blocking(move || avisos::pedir_permiso(&handle)).await;
         }
         let _ = seguimientos.revisar().await;
         refrescar_bandeja(&handle);
@@ -334,7 +398,8 @@ pub fn run() {
                     ubicacion::UbicacionSistema::new(app.handle()),
                     sofse.clone(),
                 ),
-                instalaciones: sofse,
+                noticias: Noticias::new(sofse.clone(), store.clone(), SystemClock),
+                sofse,
                 favoritos: Favoritos::new(store),
                 seguimientos,
                 estacion_abierta: Mutex::default(),
@@ -358,6 +423,8 @@ pub fn run() {
             estaciones,
             arribos,
             instalaciones,
+            noticias,
+            descartar_noticia,
             preferencias,
             agregar_favorito,
             quitar_favorito,
