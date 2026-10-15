@@ -1,4 +1,4 @@
-// Uso: node estados.mjs <png> <light|dark>
+// Uso: node estados.mjs <png> <light|dark> [ancho, 420 por defecto; 360 = celular]
 // Muestra todas las Situaciones con datos de ejemplo (intercepta el comando `arribos`)
 // en un viewport de 420 px, y saca una captura.
 import { writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ const enviar = (method, params = {}) =>
     ws.send(JSON.stringify({ id, method, params }));
   });
 
-await enviar("Emulation.setDeviceMetricsOverride", { width: 420, height: 700, deviceScaleFactor: 1, mobile: false });
+await enviar("Emulation.setDeviceMetricsOverride", { width: Number(process.argv[4] ?? 420), height: 760, deviceScaleFactor: 1, mobile: false });
 await enviar("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: esquema }] });
 
 // Datos de ejemplo con todas las Situaciones; se sirven interceptando la IPC de Tauri

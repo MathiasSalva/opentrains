@@ -15,3 +15,4 @@ dist/
 /app/build/
 /app/.svelte-kit/
 /app/src-tauri/gen/schemas/
+.tools/
