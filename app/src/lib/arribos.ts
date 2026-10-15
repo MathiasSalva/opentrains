@@ -37,7 +37,8 @@ export function estaArribando(arribo: Arribo, ahora: number): boolean {
 }
 
 interface Presentacion {
-  etiqueta: (arribo: Arribo) => string;
+  /** `compacta`: sin la demora, para las filas, donde la hora ya la muestra. */
+  etiqueta: (arribo: Arribo, compacta: boolean) => string;
 }
 
 // Un solo mapa Situación → presentación, compartido por todos los componentes.
@@ -45,7 +46,8 @@ export const SITUACIONES: Record<Situacion, Presentacion> = {
   cancelado: { etiqueta: () => "Cancelado" },
   en_anden: { etiqueta: () => "En andén" },
   demorado: {
-    etiqueta: (a) => (a.demora_minutos === null ? "Demorado" : `Demorado +${a.demora_minutos} min`),
+    etiqueta: (a, compacta) =>
+      compacta || a.demora_minutos === null ? "Demorado" : `Demorado +${a.demora_minutos} min`,
   },
   en_camino: { etiqueta: () => "En camino" },
   programado: { etiqueta: () => "Programado" },
@@ -53,9 +55,9 @@ export const SITUACIONES: Record<Situacion, Presentacion> = {
   desconocido: { etiqueta: (a) => a.estado },
 };
 
-export function etiquetaSituacion(arribo: Arribo, ahora: number): string {
+export function etiquetaSituacion(arribo: Arribo, ahora: number, compacta = false): string {
   if (claseSituacion(arribo, ahora) === "arribando") return "Arribando";
-  return SITUACIONES[arribo.situacion].etiqueta(arribo);
+  return SITUACIONES[arribo.situacion].etiqueta(arribo, compacta);
 }
 
 export type ClaseSituacion = Situacion | "arribando";

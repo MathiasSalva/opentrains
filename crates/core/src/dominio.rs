@@ -295,4 +295,7 @@ pub struct Preferencias {
     /// Última anticipación elegida al seguir un Servicio, por Estación.
     #[serde(default)]
     pub anticipaciones: BTreeMap<EstacionId, u32>,
+    /// El usuario cerró el aviso de que la Ubicación está desactivada.
+    #[serde(default)]
+    pub aviso_ubicacion_oculto: bool,
 }

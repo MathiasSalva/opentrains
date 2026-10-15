@@ -9,13 +9,14 @@
 
   const cuenta = $derived(partesCuenta(segundosRestantes(arribo, ahora)));
   const clase = $derived(claseSituacion(arribo, ahora));
+  const demorado = $derived(arribo.demora_minutos !== null && arribo.demora_minutos > 0);
 </script>
 
 <article class="proximo sit-{clase}" aria-label="Próximo tren">
   <div class="encabezado">
     <span class="rotulo">Próximo tren</span>
     <div class="lado">
-      <SituacionPill {arribo} {ahora} />
+      <SituacionPill {arribo} {ahora} latir />
       <BotonAvisar {arribo} />
     </div>
   </div>
@@ -33,13 +34,13 @@
     <div>
       <dt>Horario</dt>
       <dd>
-        {hora(arribo.programada)}
-        {#if arribo.demora_minutos !== null}<em>+{arribo.demora_minutos} min</em>{/if}
+        <span class:estimada={demorado}>{hora(arribo.momento)}</span>
+        {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
       </dd>
     </div>
     <div>
       <dt>Andén</dt>
-      <dd>{arribo.anden ?? "Sin asignar"}</dd>
+      <dd class="anden" class:sin-asignar={!arribo.anden}>{arribo.anden ?? "Sin asignar"}</dd>
     </div>
     <div>
       <dt>Servicio</dt>
@@ -50,13 +51,13 @@
 
 <style>
   .proximo {
-    border-radius: 14px;
+    border-radius: var(--radio-l);
     padding: 14px 16px 12px;
-    background: color-mix(in srgb, var(--sit) 9%, var(--superficie));
-    border: 1px solid color-mix(in srgb, var(--sit) 40%, transparent);
+    background: color-mix(in srgb, var(--sit) 8%, var(--superficie));
+    border: 1px solid color-mix(in srgb, var(--sit) 38%, transparent);
     transition:
-      background-color 0.5s ease,
-      border-color 0.5s ease;
+      background-color var(--mov-ui),
+      border-color var(--mov-ui);
   }
   .encabezado {
     display: flex;
@@ -69,32 +70,36 @@
     gap: 4px;
   }
   .rotulo {
-    font-size: 0.8rem;
+    font-family: var(--fuente-chica);
+    font-size: var(--t-micro);
     font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--texto-suave);
   }
   .cuerpo {
     display: flex;
     align-items: flex-end;
     gap: 14px;
-    margin-top: 8px;
+    margin-top: 6px;
   }
   .cuenta {
     display: flex;
     align-items: baseline;
     gap: 4px;
-    color: var(--sit);
+    font-family: var(--fuente-display);
+    color: var(--sit-texto);
     font-variant-numeric: tabular-nums;
-    transition: color 0.5s ease;
+    transition: color var(--mov-ui);
   }
   .valor {
-    font-size: 3rem;
-    font-weight: 700;
+    font-size: var(--t-cuenta);
+    font-weight: 650;
     line-height: 1;
     letter-spacing: -0.02em;
   }
   .unidad {
-    font-size: 1rem;
+    font-size: var(--t-cuerpo);
     font-weight: 600;
   }
   .destino {
@@ -104,13 +109,15 @@
     min-width: 0;
   }
   .destino strong {
-    font-size: 1.15rem;
+    font-family: var(--fuente-display);
+    font-size: var(--t-titulo);
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .destino span {
-    font-size: 0.8rem;
+    font-size: var(--t-meta);
     color: var(--texto-suave);
   }
   .datos {
@@ -118,20 +125,41 @@
     grid-template-columns: repeat(3, 1fr);
     margin: 12px 0 0;
     padding-top: 10px;
-    border-top: 1px solid color-mix(in srgb, var(--sit) 25%, transparent);
+    border-top: 1px solid var(--borde);
   }
   dt {
-    font-size: 0.7rem;
-    color: var(--texto-suave);
+    font-family: var(--fuente-chica);
+    font-size: var(--t-micro);
+    color: var(--texto-tenue);
   }
   dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 6px;
     margin: 0;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
-  em {
-    font-style: normal;
-    color: var(--demorado);
+  .estimada {
+    color: var(--sit-texto);
+  }
+  s {
+    font-size: var(--t-meta);
+    font-weight: 400;
+    color: var(--texto-tenue);
+  }
+  /* El andén es lo que se busca al llegar a la estación: un punto más grande. */
+  .anden {
+    font-family: var(--fuente-display);
+    font-size: var(--t-titulo);
+    line-height: 1.1;
+  }
+  .anden.sin-asignar {
+    font-family: var(--fuente);
+    font-size: var(--t-cuerpo);
+    font-weight: 500;
+    color: var(--texto-tenue);
   }
   .sit-cancelado .valor {
     text-decoration: line-through;

@@ -28,6 +28,7 @@ fn preferencias() -> Preferencias {
         favoritos: vec![retiro.clone()],
         ultimo_abierto: Some(retiro),
         anticipaciones: [(EstacionId(463), 12), (EstacionId(93), 5)].into(),
+        aviso_ubicacion_oculto: true,
     }
 }
 
@@ -68,6 +69,7 @@ fn las_preferencias_de_una_version_anterior_siguen_cargando() {
 
     assert_eq!(preferencias.favoritos[0].coordenadas, None);
     assert!(preferencias.anticipaciones.is_empty());
+    assert!(!preferencias.aviso_ubicacion_oculto);
 }
 
 #[test]

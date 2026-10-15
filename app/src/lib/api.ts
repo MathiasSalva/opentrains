@@ -20,6 +20,8 @@ export interface Preferencias {
   ultimo_abierto: Favorito | null;
   /** Última anticipación elegida al seguir un Servicio, por id de Estación. */
   anticipaciones?: Record<string, number>;
+  /** El usuario cerró el aviso de Ubicación desactivada. */
+  aviso_ubicacion_oculto?: boolean;
 }
 
 export interface EstacionCercana { estacion: Estacion; distancia: string }
@@ -110,6 +112,8 @@ export const api = {
   /** Textos como "a 850 m", en el orden de `destinos`; `null` sin Ubicación. */
   distancias: (destinos: Coordenadas[]) => invoke<string[] | null>("distancias", { destinos }),
   cercanas: () => invoke<EstacionCercana[] | null>("cercanas"),
+  ocultarAvisoUbicacion: () => invoke<Preferencias>("ocultar_aviso_ubicacion"),
+  abrirAjustesUbicacion: () => invoke<void>("abrir_ajustes_ubicacion"),
 };
 
 export function coordenadas(e: Estacion): Coordenadas {

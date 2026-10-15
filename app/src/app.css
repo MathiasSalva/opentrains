@@ -1,0 +1,175 @@
+/*
+ * Tokens de diseño de OpenTrains: una sola capa para escritorio y Android.
+ * Referencia: Linear (taste-library), adaptada; ver .scratch/ui-ux/plan.md.
+ * Los colores de Situación son semánticos: no se usan para decorar.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Tipografía del sistema (sin cargar fuentes). En Windows, Segoe UI Variable con sus
+     tamaños ópticos; en Android cae en Roboto y la escala se mantiene. */
+  --fuente: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --fuente-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --fuente-chica: "Segoe UI Variable Small", "Segoe UI", system-ui, sans-serif;
+  --t-micro: 11px; /* rótulos, dt, insignias */
+  --t-meta: 12.5px; /* metadatos de fila, sellos de tiempo */
+  --t-cuerpo: 14px; /* Destino, chips, selects */
+  --t-titulo: 18px; /* nombre de la Estación */
+  --t-cuenta: 48px; /* cuenta regresiva destacada */
+
+  /* Radios y áreas táctiles. */
+  --radio-s: 8px;
+  --radio-m: 12px;
+  --radio-l: 14px;
+  --radio-pill: 999px;
+  --objetivo-min: 32px;
+
+  /* Movimiento: uno para la UI (hover, color), otro para paneles que entran o salen. */
+  --mov-ui: 160ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --mov-panel: 320ms cubic-bezier(0.25, 1, 0.5, 1);
+  --mov-hoja: 420ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Superficies y texto: cuatro niveles de texto, superficies escalonadas y bordes
+     translúcidos (funcionan también sobre las tarjetas teñidas por la Situación). */
+  --fondo: #f3f4f6;
+  --superficie: #fdfdfe;
+  --superficie-elevada: #ffffff;
+  --superficie-hover: rgb(16 24 40 / 0.05);
+  --texto: #17191e;
+  --texto-suave: #4b5261;
+  --texto-tenue: #6b7180;
+  --borde: rgb(16 24 40 / 0.1);
+  --borde-fuerte: rgb(16 24 40 / 0.18);
+  --acento: #1f5fd1;
+  --sombra-flotante: 0 10px 28px rgb(16 24 40 / 0.14), 0 1px 3px rgb(16 24 40 / 0.08);
+
+  /* Situación del Arribo. */
+  --en_anden: #13803f;
+  --en_camino: #0e7490;
+  --demorado: #b45309;
+  --cancelado: #c0263f;
+  --programado: #5e6573;
+  --desconocido: #64708a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0e1014;
+    --superficie: #161a20;
+    --superficie-elevada: #1e232b;
+    --superficie-hover: rgb(255 255 255 / 0.06);
+    --texto: #eceef2;
+    --texto-suave: #a3aab7;
+    --texto-tenue: #7d8494;
+    --borde: rgb(255 255 255 / 0.08);
+    --borde-fuerte: rgb(255 255 255 / 0.14);
+    --acento: #79a7ff;
+    --sombra-flotante: 0 10px 32px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+    --en_anden: #34d17a;
+    --en_camino: #38bdd8;
+    --demorado: #fbb13c;
+    --cancelado: #fb6f84;
+    --programado: #9aa1ae;
+    --desconocido: #a3adc2;
+  }
+}
+
+/* En pantallas táctiles, objetivos de 44 px y texto un punto más grande. */
+@media (pointer: coarse) {
+  :root {
+    --t-meta: 13px;
+    --t-cuerpo: 15px;
+    --objetivo-min: 44px;
+  }
+}
+
+/* Cada componente marcado con la Situación toma su color de --sit. El texto sobre el
+   tinte se oscurece (o aclara, en modo oscuro) para llegar a 4,5:1. */
+.sit-en_anden,
+.sit-arribando {
+  --sit: var(--en_anden);
+}
+.sit-en_camino {
+  --sit: var(--en_camino);
+}
+.sit-demorado {
+  --sit: var(--demorado);
+}
+.sit-cancelado {
+  --sit: var(--cancelado);
+}
+.sit-programado {
+  --sit: var(--programado);
+}
+.sit-desconocido {
+  --sit: var(--desconocido);
+}
+[class*="sit-"] {
+  --sit-texto: color-mix(in srgb, var(--sit) 78%, var(--texto));
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--t-cuerpo);
+  background: var(--fondo);
+  color: var(--texto);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/* Botón de ícono compartido (favorito, actualizar, campana). */
+.boton-icono {
+  display: grid;
+  place-items: center;
+  min-width: var(--objetivo-min);
+  min-height: var(--objetivo-min);
+  padding: 0;
+  border-radius: var(--radio-s);
+  border: none;
+  background: none;
+  color: var(--texto-suave);
+  cursor: pointer;
+  transition:
+    background-color var(--mov-ui),
+    color var(--mov-ui),
+    transform var(--mov-ui);
+}
+@media (hover: hover) {
+  .boton-icono:hover:not(:disabled) {
+    background: var(--superficie-hover);
+    color: var(--texto);
+  }
+}
+.boton-icono:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.boton-icono:disabled {
+  cursor: default;
+}
+
+/* Texto solo para lectores de pantalla. */
+.solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Movimiento reducido: sin transformaciones ni animaciones en ningún lado. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+  }
+}

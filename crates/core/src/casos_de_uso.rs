@@ -183,6 +183,10 @@ impl<P: PreferenciasRepo> Favoritos<P> {
         })
     }
 
+    pub fn ocultar_aviso_ubicacion(&self) -> Result<Preferencias, StorageError> {
+        self.modificar(|p| p.aviso_ubicacion_oculto = true)
+    }
+
     fn modificar(
         &self,
         cambio: impl FnOnce(&mut Preferencias),

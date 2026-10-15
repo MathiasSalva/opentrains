@@ -19,6 +19,10 @@
   } from "$lib/api";
   import { fade, fly, slide } from "svelte/transition";
   import StarIcon from "phosphor-svelte/lib/StarIcon";
+  import CheckIcon from "phosphor-svelte/lib/CheckIcon";
+  import MinusIcon from "phosphor-svelte/lib/MinusIcon";
+  import XIcon from "phosphor-svelte/lib/XIcon";
+  import MagnifyingGlassIcon from "phosphor-svelte/lib/MagnifyingGlassIcon";
   import ArrowClockwiseIcon from "phosphor-svelte/lib/ArrowClockwiseIcon";
   import CaretRightIcon from "phosphor-svelte/lib/CaretRightIcon";
   import WarningIcon from "phosphor-svelte/lib/WarningIcon";
@@ -29,6 +33,7 @@
   import { duracion, EASE } from "$lib/movimiento";
   import ProximoArribo from "$lib/components/ProximoArribo.svelte";
   import GrupoRamal from "$lib/components/GrupoRamal.svelte";
+  import FilaChips from "$lib/components/FilaChips.svelte";
   import SkeletonArribos from "$lib/components/SkeletonArribos.svelte";
   import { recargarSeguimientos, seguimientos } from "$lib/seguimientos.svelte";
   import { esEscritorio } from "$lib/plataforma";
@@ -46,6 +51,8 @@
   // Por defecto se ven todos los Ramales de la Estación, agrupados.
   let soloEsteRamal = $state(false);
   let errorCatalogo = $state<string | null>(null);
+  // Con una Estación abierta el selector se pliega a una fila: lo primero es el próximo tren.
+  let selectorAbierto = $state(false);
 
   let actual = $state<Favorito | null>(null);
   let arribos = $state<Arribo[]>([]);
@@ -69,11 +76,23 @@
   /** Distancia ya formateada a cada Estación visible, por id. */
   let distancias = $state<Record<number, string>>({});
 
+  const verSelector = $derived(actual === null || selectorAbierto || errorCatalogo !== null);
   const esFavorito = $derived(
     actual !== null && preferencias.favoritos.some((f) => mismoFavorito(f, actual!)),
   );
   const destacado = $derived(proximo(arribos));
   const grupos = $derived(agruparPorRamal(arribos.filter((a) => a !== destacado)));
+  // Un solo Ramal que ya se nombra arriba (Favorito acotado o el del próximo tren): sin encabezado.
+  const ramalYaNombrado = $derived(
+    grupos.length === 1 &&
+      (actual?.ramal?.id === grupos[0].ramal.id || destacado?.ramal.id === grupos[0].ramal.id),
+  );
+  const verAvisoUbicacion = $derived(
+    hayUbicacion === false && !preferencias.aviso_ubicacion_oculto,
+  );
+  // La cabecera de la Estación queda fija arriba; al despegarse muestra una línea.
+  let cabeceraPegada = $state(false);
+  let centinela = $state<HTMLElement>();
   const desactualizado = $derived(
     errorArribos !== null && ultimaActualizacion !== null,
   );
@@ -117,6 +136,7 @@
     const estacion = estaciones.find((e) => e.id === estacionId);
     const ramal = ramales.find((r) => r.id === ramalId) ?? null;
     if (!estacion) return;
+    selectorAbierto = false;
     abrir({
       estacion: estacion.id,
       estacion_nombre: estacion.nombre,
@@ -232,6 +252,30 @@
     });
   }
 
+  async function ocultarAvisoUbicacion() {
+    try {
+      preferencias = await api.ocultarAvisoUbicacion();
+    } catch (e) {
+      console.warn(describirError(e));
+    }
+  }
+
+  async function activarUbicacion() {
+    // En Windows abre la configuración; en el celular, volver a consultar pide el permiso.
+    if (esEscritorio) await api.abrirAjustesUbicacion();
+    else await ubicar();
+  }
+
+  $effect(() => {
+    if (!centinela) return;
+    const observador = new IntersectionObserver(
+      ([entrada]) => (cabeceraPegada = !entrada.isIntersecting),
+      { rootMargin: "-1px 0px 0px 0px" },
+    );
+    observador.observe(centinela);
+    return () => observador.disconnect();
+  });
+
   function etiqueta(f: Favorito): string {
     return f.ramal ? `${f.estacion_nombre} · ${f.ramal.nombre}` : f.estacion_nombre;
   }
@@ -275,7 +319,13 @@
     if (esEscritorio) {
       const ventana = getCurrentWindow();
       dejarDeEscuchar = ventana.onFocusChanged(({ payload: enfocada }) => enfocada && alMostrarse());
-      alTeclear = (e) => e.key === "Escape" && ventana.hide();
+      // Escape cierra primero la capa más interna (el menú de una campana lo marca como
+      // usado), después el selector desplegado y recién entonces oculta el panel.
+      alTeclear = (e) => {
+        if (e.key !== "Escape" || e.defaultPrevented) return;
+        if (selectorAbierto && actual) selectorAbierto = false;
+        else ventana.hide();
+      };
       document.addEventListener("keydown", alTeclear);
     }
     return () => {
@@ -289,12 +339,11 @@
 </script>
 
 <main>
-  <header class="barra">
-    <h1>OpenTrains</h1>
-  </header>
+  <!-- La ventana no tiene marco: el título queda para lectores de pantalla. -->
+  <h1 class="solo-lector">OpenTrains</h1>
 
   {#if preferencias.favoritos.length > 0}
-    <nav class="favoritos" aria-label="Favoritos">
+    <FilaChips etiqueta="Favoritos">
       {#each preferencias.favoritos as favorito}
         <button
           class="chip"
@@ -308,17 +357,11 @@
           {/if}
         </button>
       {/each}
-    </nav>
+    </FilaChips>
   {/if}
 
-  {#if hayUbicacion === false}
-    <p class="cerca-vacio">
-      <MapPinIcon size={14} />
-      Activá la ubicación de Windows para ver estaciones cercanas
-    </p>
-  {:else if cercanas.length > 0}
-    <nav class="cerca" aria-label="Estaciones cercanas">
-      <span class="cerca-rotulo">Cerca tuyo</span>
+  {#if cercanas.length > 0 || verAvisoUbicacion}
+    <FilaChips etiqueta="Estaciones cercanas">
       {#each cercanas as cercana (cercana.estacion.id)}
         <button
           class="chip"
@@ -330,109 +373,145 @@
           <span class="distancia">{cercana.distancia}</span>
         </button>
       {/each}
-    </nav>
+      {#if verAvisoUbicacion}
+        <span class="chip-aviso">
+          <button class="chip" onclick={activarUbicacion}>
+            <MapPinIcon size={13} />
+            Activar ubicación para ver estaciones cercanas
+          </button>
+          <button
+            class="boton-icono cerrar"
+            aria-label="No mostrar más el aviso de ubicación"
+            title="No mostrar más"
+            onclick={ocultarAvisoUbicacion}
+          >
+            <XIcon size={13} weight="bold" />
+          </button>
+        </span>
+      {/if}
+    </FilaChips>
   {/if}
 
-  <section class="selector panel">
-    <label>
-      <span>Línea</span>
-      <select bind:value={lineaId} onchange={elegirLinea}>
-        <option value={null}>Elegí una línea</option>
-        {#each lineas as linea}
-          <option value={linea.id}>{linea.nombre}</option>
-        {/each}
-      </select>
-    </label>
-    <div class="par">
+  {#if verSelector}
+    <section class="selector panel" transition:slide={{ duration: duracion(220), easing: EASE }}>
       <label>
-        <span>Ramal</span>
-        <select bind:value={ramalId} onchange={elegirRamal} disabled={ramales.length === 0}>
-          <option value={null}>Elegí un ramal</option>
-          {#each ramales as ramal}
-            <option value={ramal.id}>{ramal.nombre}</option>
+        <span>Línea</span>
+        <select bind:value={lineaId} onchange={elegirLinea}>
+          <option value={null}>Elegí una línea</option>
+          {#each lineas as linea}
+            <option value={linea.id}>{linea.nombre}</option>
           {/each}
         </select>
       </label>
-      <label>
-        <span>Estación</span>
-        <select
-          bind:value={estacionId}
-          onchange={elegirEstacion}
-          disabled={estaciones.length === 0}
-        >
-          <option value={null}>Elegí una estación</option>
-          {#each estaciones as estacion}
-            <option value={estacion.id}
-              >{estacion.nombre}{distancias[estacion.id] ? ` · ${distancias[estacion.id]}` : ""}</option
-            >
-          {/each}
-        </select>
-      </label>
+      <div class="par">
+        <label>
+          <span>Ramal</span>
+          <select bind:value={ramalId} onchange={elegirRamal} disabled={ramales.length === 0}>
+            <option value={null}>Elegí un ramal</option>
+            {#each ramales as ramal}
+              <option value={ramal.id}>{ramal.nombre}</option>
+            {/each}
+          </select>
+        </label>
+        <label>
+          <span>Estación</span>
+          <select
+            bind:value={estacionId}
+            onchange={elegirEstacion}
+            disabled={estaciones.length === 0}
+          >
+            <option value={null}>Elegí una estación</option>
+            {#each estaciones as estacion}
+              <option value={estacion.id}
+                >{estacion.nombre}{distancias[estacion.id] ? ` · ${distancias[estacion.id]}` : ""}</option
+              >
+            {/each}
+          </select>
+        </label>
+      </div>
+      <div class="pie-selector">
+        <label class="check">
+          <input type="checkbox" bind:checked={soloEsteRamal} onchange={elegirEstacion} />
+          <span>Solo el ramal elegido</span>
+        </label>
+        {#if actual && selectorAbierto}
+          <button class="enlace" onclick={() => (selectorAbierto = false)}>Listo</button>
+        {/if}
+      </div>
+      {#if errorCatalogo}
+        <p class="aviso error">
+          <WarningIcon size={16} weight="bold" />
+          <span>{errorCatalogo}</span>
+          <button class="enlace" onclick={cargarLineas}>Reintentar</button>
+        </p>
+      {/if}
+    </section>
+  {:else}
+    <!-- Selector plegado: una fila de acciones (acá entra después el filtro "→ Destino"). -->
+    <div class="selector-plegado">
+      <button class="buscar" onclick={() => (selectorAbierto = true)} aria-expanded="false">
+        <MagnifyingGlassIcon size={15} weight="bold" />
+        Buscar otra estación
+      </button>
     </div>
-    <label class="check">
-      <input type="checkbox" bind:checked={soloEsteRamal} onchange={elegirEstacion} />
-      <span>Solo el ramal elegido</span>
-    </label>
-    {#if errorCatalogo}
-      <p class="aviso error">
-        <WarningIcon size={16} weight="bold" />
-        <span>{errorCatalogo}</span>
-        <button class="enlace" onclick={cargarLineas}>Reintentar</button>
-      </p>
-    {/if}
-  </section>
+  {/if}
 
   {#if actual}
     <section class="estacion">
-      <div class="titulo">
-        <div>
-          <h2>{actual.estacion_nombre}</h2>
-          <p class="sub">
-            <span>{actual.ramal ? actual.ramal.nombre : "Todos los ramales"}</span>
-            {#if distancias[actual.estacion]}
-              <span>{distancias[actual.estacion]}</span>
-            {/if}
-            {#if ultimaActualizacion !== null && !desactualizado}
-              <span class="sello">Actualizado hace {hace(ultimaActualizacion, ahora)}</span>
-            {/if}
-          </p>
+      <div class="centinela" bind:this={centinela} aria-hidden="true"></div>
+      <div class="cabecera" class:pegada={cabeceraPegada}>
+        <div class="titulo">
+          <div class="nombre">
+            <h2>{actual.estacion_nombre}</h2>
+            <p class="sub">
+              <span>{actual.ramal ? actual.ramal.nombre : "Todos los ramales"}</span>
+              {#if distancias[actual.estacion]}
+                <span>{distancias[actual.estacion]}</span>
+              {/if}
+              {#if ultimaActualizacion !== null && !desactualizado}
+                <span class="sello">Actualizado hace {hace(ultimaActualizacion, ahora)}</span>
+              {/if}
+            </p>
+          </div>
+          <div class="acciones">
+            <button
+              class="boton-icono"
+              class:marcado={esFavorito}
+              aria-label={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
+              title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
+              aria-pressed={esFavorito}
+              onclick={alternarFavorito}
+            >
+              <StarIcon size={20} weight={esFavorito ? "fill" : "regular"} />
+            </button>
+            <button
+              class="boton-icono"
+              class:girando={cargando}
+              aria-label="Actualizar los trenes"
+              title="Actualizar"
+              disabled={cargando}
+              onclick={refrescar}
+            >
+              <ArrowClockwiseIcon size={20} weight="bold" />
+            </button>
+          </div>
         </div>
-        <div class="acciones">
-          <button
-            class="icono"
-            class:marcado={esFavorito}
-            title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}
-            aria-pressed={esFavorito}
-            onclick={alternarFavorito}
-          >
-            <StarIcon size={20} weight={esFavorito ? "fill" : "regular"} />
-          </button>
-          <button
-            class="icono"
-            class:girando={cargando}
-            title="Actualizar"
-            disabled={cargando}
-            onclick={refrescar}
-          >
-            <ArrowClockwiseIcon size={20} weight="bold" />
-          </button>
-        </div>
-      </div>
 
-      {#if fuenteCambiada}
-        <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
-          <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
-        </p>
-      {:else if desactualizado}
-        <p class="aviso" transition:slide={{ duration: duracion(200) }}>
-          <WifiSlashIcon size={16} weight="bold" />
-          <span>Desactualizado, última actualización hace {hace(ultimaActualizacion!, ahora)}</span>
-        </p>
-      {:else if errorArribos}
-        <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
-          <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
-        </p>
-      {/if}
+        {#if fuenteCambiada}
+          <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
+            <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
+          </p>
+        {:else if desactualizado}
+          <p class="aviso" transition:slide={{ duration: duracion(200) }}>
+            <WifiSlashIcon size={16} weight="bold" />
+            <span>Desactualizado, última actualización hace {hace(ultimaActualizacion!, ahora)}</span>
+          </p>
+        {:else if errorArribos}
+          <p class="aviso error" transition:slide={{ duration: duracion(200) }}>
+            <WarningIcon size={16} weight="bold" /><span>{errorArribos}</span>
+          </p>
+        {/if}
+      </div>
 
       {#if ultimaActualizacion === null && cargando}
         <SkeletonArribos />
@@ -451,7 +530,7 @@
         {/if}
         {#each grupos as grupo (grupo.ramal.id)}
           <div in:fly={{ y: 12, duration: duracion(320), easing: EASE }}>
-            <GrupoRamal {grupo} {ahora} />
+            <GrupoRamal {grupo} {ahora} encabezado={!ramalYaNombrado} />
           </div>
         {/each}
       {/if}
@@ -472,11 +551,12 @@
             <p class="tenue">Sin información para esta estación.</p>
           {:else}
             <ul class="servicios">
-              <li class:no={!instalaciones.ascensor}>Ascensor</li>
-              <li class:no={!instalaciones.rampa}>Rampa</li>
-              <li class:no={!instalaciones.banos}>Baños</li>
-              <li class:no={!instalaciones.wifi}>Wifi</li>
-              <li class:no={!instalaciones.terminal_sube}>Carga SUBE</li>
+              {#each [["Ascensor", instalaciones.ascensor], ["Rampa", instalaciones.rampa], ["Baños", instalaciones.banos], ["Wifi", instalaciones.wifi], ["Carga SUBE", instalaciones.terminal_sube]] as const as [nombre, hay]}
+                <li class:no={!hay}>
+                  {#if hay}<CheckIcon size={12} weight="bold" />{:else}<MinusIcon size={12} weight="bold" />{/if}
+                  {nombre}<span class="solo-lector">{hay ? ": sí" : ": no"}</span>
+                </li>
+              {/each}
             </ul>
             <dl class="fichas">
               {#if instalaciones.boleteria}<dt>Boletería</dt><dd>{instalaciones.boleteria}</dd>{/if}
@@ -492,157 +572,40 @@
 </main>
 
 <style>
-  :global(:root) {
-    color-scheme: light dark;
-    /* Fuente del sistema de Windows: la app se siente nativa y no carga fuentes. */
-    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-    font-size: 15px;
-    --fondo: #f3f4f6;
-    --superficie: #fdfdfe;
-    --texto: #17191e;
-    --texto-suave: #5e6573;
-    --borde: #e2e5ea;
-    --acento: #1f5fd1;
-    /* Situación del Arribo: colores semánticos, no decorativos. */
-    --en_anden: #13803f;
-    --en_camino: #0e7490;
-    --demorado: #b45309;
-    --cancelado: #c0263f;
-    --programado: #5e6573;
-    --desconocido: #64708a;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(:root) {
-      --fondo: #0e1014;
-      --superficie: #161a20;
-      --texto: #eceef2;
-      --texto-suave: #959cab;
-      --borde: #262b34;
-      --acento: #79a7ff;
-      --en_anden: #34d17a;
-      --en_camino: #38bdd8;
-      --demorado: #fbb13c;
-      --cancelado: #fb6f84;
-      --programado: #9aa1ae;
-      --desconocido: #a3adc2;
-    }
-  }
-  :global(.sit-en_anden),
-  :global(.sit-arribando) {
-    --sit: var(--en_anden);
-  }
-  :global(.sit-en_camino) {
-    --sit: var(--en_camino);
-  }
-  :global(.sit-demorado) {
-    --sit: var(--demorado);
-  }
-  :global(.sit-cancelado) {
-    --sit: var(--cancelado);
-  }
-  :global(.sit-programado) {
-    --sit: var(--programado);
-  }
-  :global(.sit-desconocido) {
-    --sit: var(--desconocido);
-  }
-  :global(body) {
-    margin: 0;
-    background: var(--fondo);
-    color: var(--texto);
-    -webkit-font-smoothing: antialiased;
-  }
-  :global(:focus-visible) {
-    outline: 2px solid var(--acento);
-    outline-offset: 2px;
-  }
-
   main {
     /* En Android 15+ la webview va de borde a borde: se respetan la barra de estado y la de gestos. */
     padding: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
       calc(24px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
     display: grid;
-    gap: 12px;
+    gap: 10px;
   }
-  .barra h1 {
-    margin: 0;
-    font-size: 1.15rem;
-    letter-spacing: -0.01em;
+  /* Debajo de la barra de estado del celular nada se ve pasar al hacer scroll. */
+  main::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top);
+    background: var(--fondo);
+    z-index: 6;
   }
   .panel {
     background: var(--superficie);
     border: 1px solid var(--borde);
-    border-radius: 14px;
+    border-radius: var(--radio-l);
     padding: 12px;
   }
 
-  .favoritos {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .chip {
+  .chip-aviso {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
     flex-shrink: 0;
-    border: 1px solid var(--borde);
-    background: var(--superficie);
-    color: var(--texto);
-    border-radius: 999px;
-    padding: 5px 11px;
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.82rem;
-    transition:
-      border-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.15s ease;
   }
-  .chip :global(svg) {
-    color: var(--demorado);
-  }
-  .chip:hover {
-    border-color: var(--acento);
-  }
-  .chip:active {
-    transform: scale(0.97);
-  }
-  .chip.activo {
-    border-color: var(--acento);
-    color: var(--acento);
-  }
-  .distancia {
-    color: var(--texto-suave);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .cerca {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .cerca .chip :global(svg) {
-    color: var(--acento);
-  }
-  .cerca-rotulo {
-    flex-shrink: 0;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+  .chip-aviso .chip {
+    border-style: dashed;
     color: var(--texto-suave);
   }
-  .cerca-vacio {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    font-size: 0.78rem;
-    color: var(--texto-suave);
+  .cerrar {
+    color: var(--texto-tenue);
   }
 
   .selector {
@@ -657,23 +620,35 @@
   label {
     display: grid;
     gap: 4px;
-    font-size: 0.78rem;
+    font-family: var(--fuente-chica);
+    font-size: var(--t-micro);
     font-weight: 600;
     color: var(--texto-suave);
     min-width: 0;
+  }
+  .pie-selector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   label.check {
     display: flex;
     align-items: center;
     gap: 7px;
+    min-height: var(--objetivo-min);
+    font-family: var(--fuente);
+    font-size: var(--t-meta);
     font-weight: 500;
   }
   select {
     font: inherit;
-    font-size: 0.9rem;
-    padding: 7px 8px;
-    border-radius: 8px;
-    border: 1px solid var(--borde);
+    font-family: var(--fuente);
+    font-size: var(--t-cuerpo);
+    font-weight: 400;
+    min-height: var(--objetivo-min);
+    padding: 6px 8px;
+    border-radius: var(--radio-s);
+    border: 1px solid var(--borde-fuerte);
     background: var(--fondo);
     color: var(--texto);
     min-width: 0;
@@ -685,27 +660,85 @@
     accent-color: var(--acento);
   }
 
+  .selector-plegado {
+    display: flex;
+    gap: 6px;
+  }
+  .buscar {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    min-height: var(--objetivo-min);
+    padding: 0 12px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-m);
+    background: var(--superficie);
+    color: var(--texto-suave);
+    font: inherit;
+    font-size: var(--t-meta);
+    cursor: pointer;
+    transition:
+      border-color var(--mov-ui),
+      background-color var(--mov-ui),
+      color var(--mov-ui);
+  }
+  @media (hover: hover) {
+    .buscar:hover {
+      border-color: var(--borde-fuerte);
+      background: var(--superficie-elevada);
+      color: var(--texto);
+    }
+  }
+
   .estacion {
     display: grid;
     gap: 10px;
+  }
+  .centinela {
+    height: 1px;
+    margin-bottom: -11px; /* no suma espacio: compensa el gap de la grilla */
+  }
+  /* Nombre, frescura y actualizar quedan a mano al recorrer una lista larga. */
+  .cabecera {
+    position: sticky;
+    top: env(safe-area-inset-top);
+    z-index: 5;
+    display: grid;
+    gap: 8px;
+    margin: 0 -14px;
+    padding: 6px 14px;
+    background: var(--fondo);
+    transition: box-shadow var(--mov-ui);
+  }
+  .cabecera.pegada {
+    box-shadow: 0 1px 0 var(--borde);
   }
   .titulo {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 2px 2px 0;
+    gap: 8px;
+  }
+  .nombre {
+    min-width: 0;
   }
   h2 {
     margin: 0;
-    font-size: 1.25rem;
+    font-family: var(--fuente-display);
+    font-size: var(--t-titulo);
+    font-weight: 600;
     letter-spacing: -0.01em;
   }
   .sub {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px 10px;
+    gap: 0 10px;
     margin: 2px 0 0;
-    font-size: 0.8rem;
+    font-size: var(--t-meta);
+    color: var(--texto-tenue);
+  }
+  .sub span:first-child {
     color: var(--texto-suave);
   }
   .sello {
@@ -715,38 +748,15 @@
     display: flex;
     gap: 2px;
   }
-  button.icono {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: none;
-    border: none;
-    color: var(--texto-suave);
-    cursor: pointer;
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.15s ease;
+  .acciones .boton-icono {
+    min-width: 36px;
+    min-height: 36px;
   }
-  button.icono:hover {
-    background: var(--borde);
-    color: var(--texto);
+  .boton-icono.marcado {
+    color: var(--acento);
   }
-  button.icono:active {
-    transform: scale(0.94);
-  }
-  button.icono:disabled {
-    cursor: default;
-  }
-  button.icono.marcado {
-    color: var(--demorado);
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    button.girando :global(svg) {
-      animation: girar 0.9s linear infinite;
-    }
+  .girando :global(svg) {
+    animation: girar 0.9s linear infinite;
   }
   @keyframes girar {
     to {
@@ -754,35 +764,40 @@
     }
   }
 
+  /* Avisos: neutros salvo los errores, que van en rojo. El ámbar es de "Demorado". */
   .aviso {
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0;
     padding: 8px 10px;
-    border-radius: 10px;
-    font-size: 0.85rem;
-    color: var(--demorado);
-    background: color-mix(in srgb, var(--demorado) 13%, transparent);
+    border-radius: var(--radio-m);
+    font-size: var(--t-meta);
+    color: var(--texto-suave);
+    background: var(--superficie-elevada);
+    border: 1px solid var(--borde);
   }
   .aviso span {
     color: var(--texto);
   }
   .aviso.error {
     color: var(--cancelado);
-    background: color-mix(in srgb, var(--cancelado) 13%, transparent);
+    background: color-mix(in srgb, var(--cancelado) 12%, var(--superficie));
+    border-color: color-mix(in srgb, var(--cancelado) 30%, transparent);
   }
   .aviso :global(svg) {
     flex-shrink: 0;
   }
   button.enlace {
     margin-left: auto;
+    min-height: var(--objetivo-min);
     background: none;
     border: none;
-    padding: 0;
+    padding: 0 4px;
     color: var(--acento);
     cursor: pointer;
     font: inherit;
+    font-size: var(--t-meta);
     font-weight: 600;
   }
 
@@ -791,11 +806,11 @@
     gap: 4px;
     padding: 22px 16px;
     text-align: center;
-    border: 1px dashed var(--borde);
-    border-radius: 14px;
+    border: 1px dashed var(--borde-fuerte);
+    border-radius: var(--radio-l);
   }
   .vacio span {
-    font-size: 0.85rem;
+    font-size: var(--t-meta);
     color: var(--texto-suave);
   }
 
@@ -807,7 +822,8 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: 8px 0;
+    min-height: var(--objetivo-min);
+    padding: 6px 0;
     background: none;
     border: none;
     color: var(--texto);
@@ -817,15 +833,15 @@
   }
   .caret {
     display: grid;
-    color: var(--texto-suave);
-    transition: transform 0.2s ease;
+    color: var(--texto-tenue);
+    transition: transform var(--mov-ui);
   }
   .caret.abierto {
     transform: rotate(90deg);
   }
   .tenue {
     margin: 0 0 10px;
-    font-size: 0.85rem;
+    font-size: var(--t-meta);
     color: var(--texto-suave);
   }
   .servicios {
@@ -837,28 +853,30 @@
     padding: 0;
   }
   .servicios li {
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 999px;
-    color: var(--en_anden);
-    background: color-mix(in srgb, var(--en_anden) 14%, transparent);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--t-meta);
+    font-weight: 500;
+    padding: 3px 10px 3px 8px;
+    border-radius: var(--radio-pill);
+    color: var(--texto);
+    background: var(--superficie-elevada);
+    border: 1px solid var(--borde);
   }
   .servicios li.no {
-    color: var(--texto-suave);
+    color: var(--texto-tenue);
     background: none;
-    border: 1px solid var(--borde);
-    text-decoration: line-through;
   }
   .fichas {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 6px 12px;
     margin: 0 0 12px;
-    font-size: 0.83rem;
+    font-size: var(--t-meta);
   }
   .fichas dt {
-    color: var(--texto-suave);
+    color: var(--texto-tenue);
   }
   .fichas dd {
     margin: 0;

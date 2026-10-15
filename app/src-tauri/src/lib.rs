@@ -217,6 +217,20 @@ fn seguimientos(app: State<'_, AppState>) -> Vec<Seguimiento> {
     app.seguimientos.activos()
 }
 
+#[tauri::command]
+fn ocultar_aviso_ubicacion(app: State<'_, AppState>) -> Result<Preferencias, AppError> {
+    Ok(app.favoritos.ocultar_aviso_ubicacion()?)
+}
+
+/// Abre la configuración de ubicación del sistema (en Windows, Privacidad > Ubicación).
+#[tauri::command]
+fn abrir_ajustes_ubicacion() {
+    #[cfg(windows)]
+    let _ = std::process::Command::new("explorer.exe")
+        .arg("ms-settings:privacy-location")
+        .spawn();
+}
+
 /// Consulta la Ubicación; `false` si no hay ninguna conocida.
 #[tauri::command]
 async fn ubicar(app: State<'_, AppState>) -> Result<bool, AppError> {
@@ -353,7 +367,9 @@ pub fn run() {
             seguimientos,
             ubicar,
             distancias,
-            cercanas
+            cercanas,
+            ocultar_aviso_ubicacion,
+            abrir_ajustes_ubicacion
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar OpenTrains");

@@ -8,6 +8,8 @@
   let { arribo, ahora }: { arribo: Arribo; ahora: number } = $props();
 
   const clase = $derived(claseSituacion(arribo, ahora));
+  // Con demora, la hora que importa es la estimada; la programada queda tachada.
+  const demorado = $derived(arribo.demora_minutos !== null && arribo.demora_minutos > 0);
 </script>
 
 <div class="fila sit-{clase}">
@@ -15,12 +17,12 @@
   <div class="detalle">
     <span class="destino">a {arribo.destino}</span>
     <span class="meta">
-      {hora(arribo.programada)}
-      {#if arribo.demora_minutos !== null}<em>+{arribo.demora_minutos} min</em>{/if}
+      <span class:estimada={demorado}>{hora(arribo.momento)}</span>
+      {#if demorado}<s aria-label="programado {hora(arribo.programada)}">{hora(arribo.programada)}</s>{/if}
       {#if arribo.anden}<span>andén {arribo.anden}</span>{/if}
     </span>
   </div>
-  <SituacionPill {arribo} {ahora} />
+  <SituacionPill {arribo} {ahora} compacta />
   <BotonAvisar {arribo} />
 </div>
 
@@ -45,16 +47,16 @@
     width: 3px;
     border-radius: 3px;
     background: var(--sit);
-    transition: background-color 0.4s ease;
+    transition: background-color var(--mov-ui);
   }
   .cuenta {
-    font-size: 1.05rem;
+    font-size: var(--t-cuerpo);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
   .sit-arribando .cuenta,
   .sit-en_anden .cuenta {
-    color: var(--sit);
+    color: var(--sit-texto);
   }
   .detalle {
     display: grid;
@@ -73,14 +75,16 @@
     flex-wrap: wrap;
     gap: 0 6px;
     white-space: nowrap;
-    font-size: 0.78rem;
+    font-size: var(--t-meta);
     color: var(--texto-suave);
     font-variant-numeric: tabular-nums;
   }
-  em {
-    font-style: normal;
+  .estimada {
     font-weight: 600;
-    color: var(--demorado);
+    color: var(--sit-texto);
+  }
+  s {
+    color: var(--texto-tenue);
   }
   /* En el celular (o un panel angosto) la Situación queda en ícono y color. */
   @container fila (max-width: 340px) {
@@ -95,6 +99,6 @@
   .sit-cancelado .destino,
   .sit-cancelado .meta {
     text-decoration: line-through;
-    color: var(--texto-suave);
+    color: var(--texto-tenue);
   }
 </style>

@@ -13,21 +13,18 @@
   }
   .bloque {
     height: 48px;
-    border-radius: 14px;
-    background: var(--borde);
-    opacity: 0.7;
+    border-radius: var(--radio-l);
+    background: var(--superficie-hover);
   }
   .grande {
     height: 132px;
   }
-  @media (prefers-reduced-motion: no-preference) {
-    .bloque {
-      animation: respirar 1.4s ease-in-out infinite;
-    }
+  .bloque {
+    animation: respirar 1.4s ease-in-out infinite;
   }
   @keyframes respirar {
     50% {
-      opacity: 0.35;
+      opacity: 0.5;
     }
   }
 </style>

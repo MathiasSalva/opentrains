@@ -127,3 +127,15 @@ fn la_anticipacion_se_recuerda_por_estacion() {
     assert_eq!(preferencias.anticipaciones.get(&EstacionId(293)), Some(&5));
     assert_eq!(repo.0.borrow().anticipaciones, preferencias.anticipaciones);
 }
+
+#[test]
+fn el_aviso_de_ubicacion_se_puede_ocultar_para_siempre() {
+    let repo = FakeRepo::default();
+    let favoritos = Favoritos::new(&repo);
+    assert!(!favoritos.preferencias().unwrap().aviso_ubicacion_oculto);
+
+    let preferencias = favoritos.ocultar_aviso_ubicacion().unwrap();
+
+    assert!(preferencias.aviso_ubicacion_oculto);
+    assert!(repo.0.borrow().aviso_ubicacion_oculto);
+}
