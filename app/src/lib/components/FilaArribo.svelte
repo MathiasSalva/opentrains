@@ -26,8 +26,10 @@
 
 <style>
   .fila {
+    /* El ancho de la fila decide si la Situación entra con texto o solo con ícono. */
+    container: fila / inline-size;
     display: grid;
-    grid-template-columns: 4.2rem 1fr auto auto;
+    grid-template-columns: 4.2rem minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 6px 10px;
     padding: 9px 6px 9px 14px;
@@ -64,9 +66,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Hora, demora y andén pasan de línea enteros: nunca se parten ni se montan
+     sobre la Situación. */
   .meta {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 0 6px;
+    white-space: nowrap;
     font-size: 0.78rem;
     color: var(--texto-suave);
     font-variant-numeric: tabular-nums;
@@ -75,6 +81,15 @@
     font-style: normal;
     font-weight: 600;
     color: var(--demorado);
+  }
+  /* En el celular (o un panel angosto) la Situación queda en ícono y color. */
+  @container fila (max-width: 340px) {
+    .fila :global(.pill .texto) {
+      display: none;
+    }
+    .fila :global(.pill) {
+      padding: 4px;
+    }
   }
   .sit-cancelado .cuenta,
   .sit-cancelado .destino,

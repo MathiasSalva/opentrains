@@ -22,11 +22,14 @@
 
   const clase = $derived(claseSituacion(arribo, ahora));
   const Icono = $derived(ICONOS[clase]);
+  const etiqueta = $derived(etiquetaSituacion(arribo, ahora));
 </script>
 
-<span class="pill sit-{clase}">
+<!-- En filas angostas el texto se oculta (ver FilaArribo): el nombre accesible y el
+     tooltip lo conservan. -->
+<span class="pill sit-{clase}" role="img" aria-label={etiqueta} title={etiqueta}>
   <Icono size={14} weight="bold" />
-  {etiquetaSituacion(arribo, ahora)}
+  <span class="texto">{etiqueta}</span>
 </span>
 
 <style>
