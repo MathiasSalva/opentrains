@@ -104,6 +104,8 @@ pub trait PreferenciasRepo {
 /// Muestra un Aviso al usuario (en Windows, una notificación del sistema).
 pub trait Notificador {
     fn notificar(&self, seguimiento: &Seguimiento, aviso: &Aviso);
+    /// Una Noticia destacada de `lugar`: la Estación de un Favorito o de un Seguimiento.
+    fn notificar_noticia(&self, lugar: &str, noticia: &Noticia);
 }
 
 pub trait Clock {

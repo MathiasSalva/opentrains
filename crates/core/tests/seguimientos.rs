@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use opentrains_core::casos_de_uso::Seguimientos;
 use opentrains_core::dominio::{
-    Arribo, Aviso, EstacionId, EstadoServicio, Ramal, RamalId, Seguimiento, Servicio,
+    Arribo, Aviso, EstacionId, EstadoServicio, Noticia, Ramal, RamalId, Seguimiento, Servicio,
 };
 use opentrains_core::puertos::{ArribosSource, Clock, Notificador, SourceError};
 use std::cell::{Cell, RefCell};
@@ -87,6 +87,7 @@ impl Notificador for &FakeNotificador {
             .borrow_mut()
             .push((seguimiento.numero, aviso.clone()));
     }
+    fn notificar_noticia(&self, _: &str, _: &Noticia) {}
 }
 
 struct RelojManual(Cell<DateTime<Utc>>);
@@ -275,4 +276,95 @@ async fn el_servicio_seguido_recuerda_su_cambio_de_anden() {
     e.fuente.poner(RETIRO, vec![en_anden(Some("4"))]);
     seguimientos.revisar().await.unwrap();
     assert_eq!(anterior(), Some("2".into()));
+}
+
+fn en_anden(anden: Option<&str>) -> Arribo {
+    Arribo {
+        anden: anden.map(Into::into),
+        ..arribo(3907, t("2026-10-13T10:30:00Z"))
+    }
+}
+
+fn cambio(anden: &str, anterior: &str) -> (u32, Aviso) {
+    (
+        3907,
+        Aviso::CambioDeAnden {
+            anden: anden.into(),
+            anterior: anterior.into(),
+        },
+    )
+}
+
+#[tokio::test]
+async fn cada_cambio_de_anden_del_servicio_seguido_se_avisa_una_vez() {
+    let e = Escenario::new("2026-10-13T10:00:00Z");
+    let s = e.seguimientos();
+    s.seguir(seguir_3907(5));
+
+    e.fuente.poner(RETIRO, vec![en_anden(None)]);
+    s.revisar().await.unwrap();
+    e.fuente.poner(RETIRO, vec![en_anden(Some("2"))]);
+    s.revisar().await.unwrap();
+    assert_eq!(e.avisos(), vec![], "que se le asigne andén no es un cambio");
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("4"))]);
+    s.revisar().await.unwrap();
+    assert_eq!(e.avisos(), vec![cambio("4", "2")]);
+
+    s.revisar().await.unwrap();
+    assert_eq!(e.avisos(), vec![], "el mismo cambio no se repite");
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("2"))]);
+    s.revisar().await.unwrap();
+    assert_eq!(e.avisos(), vec![cambio("2", "4")]);
+}
+
+#[tokio::test]
+async fn perder_el_anden_y_recuperar_el_mismo_no_se_avisa() {
+    let e = Escenario::new("2026-10-13T10:00:00Z");
+    let s = e.seguimientos();
+    s.seguir(seguir_3907(5));
+    for anden in [Some("2"), Some("4"), None] {
+        e.fuente.poner(RETIRO, vec![en_anden(anden)]);
+        s.revisar().await.unwrap();
+    }
+    e.avisos();
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("4"))]);
+    s.revisar().await.unwrap();
+
+    assert_eq!(e.avisos(), vec![]);
+}
+
+#[tokio::test]
+async fn volver_con_otro_anden_despues_de_perderlo_es_un_cambio() {
+    let e = Escenario::new("2026-10-13T10:00:00Z");
+    let s = e.seguimientos();
+    s.seguir(seguir_3907(5));
+    for anden in [Some("2"), Some("4"), None] {
+        e.fuente.poner(RETIRO, vec![en_anden(anden)]);
+        s.revisar().await.unwrap();
+    }
+    e.avisos();
+
+    e.fuente.poner(RETIRO, vec![en_anden(Some("5"))]);
+    s.revisar().await.unwrap();
+
+    assert_eq!(e.avisos(), vec![cambio("5", "4")]);
+}
+
+#[tokio::test]
+async fn un_servicio_cancelado_no_avisa_cambio_de_anden() {
+    let e = Escenario::new("2026-10-13T10:00:00Z");
+    let s = e.seguimientos();
+    s.seguir(seguir_3907(5));
+    e.fuente.poner(RETIRO, vec![en_anden(Some("2"))]);
+    s.revisar().await.unwrap();
+
+    let mut cancelado = en_anden(Some("4"));
+    cancelado.servicio.cancelado = true;
+    e.fuente.poner(RETIRO, vec![cancelado]);
+    s.revisar().await.unwrap();
+
+    assert_eq!(e.avisos(), vec![(3907, Aviso::Cancelado)]);
 }

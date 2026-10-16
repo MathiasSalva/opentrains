@@ -3,14 +3,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use opentrains_core::casos_de_uso::Seguimientos;
-use opentrains_core::dominio::{Aviso, Seguimiento};
+use opentrains_core::casos_de_uso::{Noticias, Seguimientos};
+use opentrains_core::dominio::{Aviso, Noticia, Seguimiento};
 use opentrains_core::puertos::{Notificador, SystemClock};
 use opentrains_sofse::SofseClient;
+use opentrains_storage::JsonStore;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
 pub type SeguimientosApp<R> = Seguimientos<Arc<SofseClient>, NotificadorSistema<R>, SystemClock>;
+pub type NoticiasApp = Noticias<Arc<SofseClient>, Arc<JsonStore>, SystemClock>;
 
 /// Cada cuánto se revisan los Servicios seguidos, con o sin el panel abierto.
 const INTERVALO: Duration = Duration::from_secs(30);
@@ -20,12 +22,22 @@ pub struct NotificadorSistema<R: Runtime>(pub AppHandle<R>);
 impl<R: Runtime> Notificador for NotificadorSistema<R> {
     fn notificar(&self, seguimiento: &Seguimiento, aviso: &Aviso) {
         let (titulo, cuerpo) = textos(seguimiento, aviso);
+        self.mostrar(&titulo, &cuerpo);
+    }
+
+    fn notificar_noticia(&self, lugar: &str, noticia: &Noticia) {
+        self.mostrar(&format!("Noticia del operador: {lugar}"), &noticia.texto);
+    }
+}
+
+impl<R: Runtime> NotificadorSistema<R> {
+    fn mostrar(&self, titulo: &str, cuerpo: &str) {
         let resultado = self
             .0
             .notification()
             .builder()
-            .title(&titulo)
-            .body(&cuerpo)
+            .title(titulo)
+            .body(cuerpo)
             .show();
         match resultado {
             Ok(()) => eprintln!("[avisos] {titulo}: {cuerpo}"),
@@ -61,15 +73,20 @@ pub fn textos(seguimiento: &Seguimiento, aviso: &Aviso) -> (String, String) {
         Aviso::Recordatorio { minutos } => format!("Sale en {minutos} min."),
         Aviso::Demora { minutos } => format!("Viene con {minutos} min de demora."),
         Aviso::Cancelado => "Fue cancelado.".to_owned(),
+        Aviso::CambioDeAnden { anden, anterior } => {
+            format!("Cambió al andén {anden} (antes andén {anterior}).")
+        }
     };
     (titulo, cuerpo)
 }
 
-/// Revisa los Seguimientos periódicamente mientras la app esté viva; `despues` corre al
-/// final de cada vuelta, haya o no Seguimientos. En Android el proceso en segundo plano
+/// Revisa los Seguimientos y las Noticias destacadas periódicamente mientras la app esté
+/// viva; `despues` corre al final de cada vuelta, haya o no Seguimientos. En Android el proceso en segundo plano
 /// queda dormido o lo mata el sistema, así que los Avisos llegan solo con la app abierta.
 pub fn vigilar<R: Runtime>(
     seguimientos: Arc<SeguimientosApp<R>>,
+    noticias: Arc<NoticiasApp>,
+    notificador: NotificadorSistema<R>,
     despues: impl Fn() + Send + 'static,
 ) {
     tauri::async_runtime::spawn(async move {
@@ -77,6 +94,9 @@ pub fn vigilar<R: Runtime>(
             tokio::time::sleep(INTERVALO).await;
             // Un error de red deja los Seguimientos intactos; se reintenta en la próxima vuelta.
             let _ = seguimientos.revisar().await;
+            // Después de revisar, para que los Seguimientos ya conozcan el Ramal de su Servicio.
+            // Las Noticias se piden a lo sumo cada `REFRESCO_MINUTOS`.
+            noticias.avisar(&seguimientos.activos(), &notificador).await;
             despues();
         }
     });

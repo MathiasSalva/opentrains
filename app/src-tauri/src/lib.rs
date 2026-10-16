@@ -34,7 +34,7 @@ struct AppState {
     /// sería un pasamanos.
     sofse: Arc<SofseClient>,
     favoritos: Favoritos<Arc<JsonStore>>,
-    noticias: Noticias<Arc<SofseClient>, Arc<JsonStore>, SystemClock>,
+    noticias: Arc<avisos::NoticiasApp>,
     cercania: Cercania<ubicacion::UbicacionSistema, Arc<SofseClient>>,
     seguimientos: Arc<avisos::SeguimientosApp<tauri::Wry>>,
     /// Nombre y Arribos de la Estación abierta según el último refresco, para la bandeja.
@@ -152,11 +152,10 @@ async fn noticias(
     app: State<'_, AppState>,
     favorito: Favorito,
 ) -> Result<Vec<NoticiaVista>, AppError> {
-    let ramales = match &favorito.ramal {
-        Some(ramal) => vec![ramal.id],
-        None => favorito.ramales.clone(),
-    };
-    let noticias = app.noticias.de_estacion(favorito.estacion, &ramales).await;
+    let noticias = app
+        .noticias
+        .de_estacion(favorito.estacion, &favorito.ramales_de_noticias())
+        .await;
     Ok(noticias.into_iter().map(NoticiaVista::from).collect())
 }
 
@@ -387,10 +386,16 @@ pub fn run() {
                 avisos::NotificadorSistema(app.handle().clone()),
                 SystemClock,
             ));
+            let noticias = Arc::new(Noticias::new(sofse.clone(), store.clone(), SystemClock));
             let handle = app.handle().clone();
             // Cada vuelta también recalcula la cuenta regresiva de la bandeja. En Android el
             // loop solo corre con la app abierta: en segundo plano el sistema lo duerme.
-            avisos::vigilar(seguimientos.clone(), move || refrescar_bandeja(&handle));
+            avisos::vigilar(
+                seguimientos.clone(),
+                noticias.clone(),
+                avisos::NotificadorSistema(app.handle().clone()),
+                move || refrescar_bandeja(&handle),
+            );
             app.manage(AppState {
                 catalogo: Catalogo::new(sofse.clone(), store.clone(), SystemClock),
                 arribos: ConsultaArribos::new(sofse.clone()),
@@ -398,7 +403,7 @@ pub fn run() {
                     ubicacion::UbicacionSistema::new(app.handle()),
                     sofse.clone(),
                 ),
-                noticias: Noticias::new(sofse.clone(), store.clone(), SystemClock),
+                noticias,
                 sofse,
                 favoritos: Favoritos::new(store),
                 seguimientos,

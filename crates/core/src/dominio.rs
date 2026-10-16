@@ -199,6 +199,12 @@ pub struct Seguimiento {
     /// Último Arribo visto de este Servicio en la Estación.
     #[serde(default)]
     pub ultimo_arribo: Option<Arribo>,
+    /// Último andén que se le conoció, aunque después lo haya perdido.
+    #[serde(default)]
+    pub anden_conocido: Option<String>,
+    /// Andén del último Cambio de andén avisado.
+    #[serde(default)]
+    pub anden_avisado: Option<String>,
 }
 
 /// Algo que vale la pena avisarle al usuario sobre un Servicio que sigue.
@@ -213,6 +219,10 @@ pub enum Aviso {
         minutos: i64,
     },
     Cancelado,
+    CambioDeAnden {
+        anden: String,
+        anterior: String,
+    },
 }
 
 impl Seguimiento {
@@ -236,6 +246,8 @@ impl Seguimiento {
             demora_avisada: None,
             cancelacion_avisada: false,
             ultimo_arribo: None,
+            anden_conocido: None,
+            anden_avisado: None,
         }
     }
 
@@ -253,6 +265,15 @@ impl Seguimiento {
                 avisos.push(Aviso::Cancelado);
             }
             return avisos;
+        }
+        if let (Some(anden), Some(anterior)) = (&arribo.anden, &arribo.anden_anterior) {
+            if self.anden_avisado.as_ref() != Some(anden) {
+                self.anden_avisado = Some(anden.clone());
+                avisos.push(Aviso::CambioDeAnden {
+                    anden: anden.clone(),
+                    anterior: anterior.clone(),
+                });
+            }
         }
         if let Some(demora) = arribo.demora_minutos() {
             let crecio = self
@@ -359,6 +380,15 @@ impl Favorito {
         self.estacion == otro.estacion
             && self.ramal.as_ref().map(|r| r.id) == otro.ramal.as_ref().map(|r| r.id)
     }
+
+    /// Ramales cuyas Noticias le corresponden: el suyo si está acotado a uno; si no,
+    /// todos los que pasan por la Estación.
+    pub fn ramales_de_noticias(&self) -> Vec<RamalId> {
+        match &self.ramal {
+            Some(ramal) => vec![ramal.id],
+            None => self.ramales.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -374,4 +404,7 @@ pub struct Preferencias {
     /// Noticias que el usuario descartó, por id.
     #[serde(default)]
     pub noticias_descartadas: BTreeSet<u64>,
+    /// Noticias destacadas ya avisadas, por id.
+    #[serde(default)]
+    pub noticias_avisadas: BTreeSet<u64>,
 }

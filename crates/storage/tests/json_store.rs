@@ -31,6 +31,7 @@ fn preferencias() -> Preferencias {
         anticipaciones: [(EstacionId(463), 12), (EstacionId(93), 5)].into(),
         aviso_ubicacion_oculto: true,
         noticias_descartadas: [98433, 7001].into(),
+        noticias_avisadas: [98500].into(),
     }
 }
 

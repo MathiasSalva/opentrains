@@ -377,11 +377,14 @@ impl<A: ArribosSource, N: Notificador, C: Clock> Seguimientos<A, N, C> {
                     return false;
                 };
                 let mut arribo = arribo.clone();
-                if let Some(visto) = &seguimiento.ultimo_arribo {
-                    arribo.marcar_cambio_de_anden(
-                        visto.anden.as_deref(),
-                        visto.anden_anterior.clone(),
-                    );
+                let anterior = seguimiento
+                    .ultimo_arribo
+                    .as_ref()
+                    .and_then(|visto| visto.anden_anterior.clone());
+                arribo.marcar_cambio_de_anden(seguimiento.anden_conocido.as_deref(), anterior);
+                // Perder el andén no es un cambio: se recuerda el último conocido.
+                if arribo.anden.is_some() {
+                    seguimiento.anden_conocido = arribo.anden.clone();
                 }
                 seguimiento.ultimo_arribo = Some(arribo.clone());
                 for aviso in seguimiento.evaluar(&arribo, ahora) {
@@ -405,6 +408,8 @@ pub struct Noticias<S, P, C> {
     reloj: C,
     /// Cuándo se intentó pedirlas por última vez y las últimas que llegaron.
     ultimas: Mutex<Option<(DateTime<Utc>, Vec<Noticia>)>>,
+    /// Las ya avisadas, por si falla el disco: así no se repiten en cada vuelta.
+    avisadas: Mutex<BTreeSet<u64>>,
 }
 
 impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
@@ -414,6 +419,7 @@ impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
             repo,
             reloj,
             ultimas: Mutex::default(),
+            avisadas: Mutex::default(),
         }
     }
 
@@ -438,6 +444,58 @@ impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
         vistas
     }
 
+    /// Avisa una vez cada Noticia destacada y vigente que corresponda a un Favorito o a
+    /// un Servicio seguido (su Estación o su Ramal); el lugar es el primero que coincida.
+    pub async fn avisar(&self, seguimientos: &[Seguimiento], notificador: &impl Notificador) {
+        let ahora = self.reloj.ahora();
+        let todas = self.todas(ahora).await;
+        // Se carga después de consultar la fuente, para no pisar lo que cambió mientras.
+        let Ok(mut preferencias) = self.repo.cargar() else {
+            return;
+        };
+        let lugares: Vec<(&str, EstacionId, Vec<RamalId>)> = preferencias
+            .favoritos
+            .iter()
+            .map(|f| {
+                (
+                    f.estacion_nombre.as_str(),
+                    f.estacion,
+                    f.ramales_de_noticias(),
+                )
+            })
+            .chain(seguimientos.iter().map(|s| {
+                let ramal = s.ultimo_arribo.as_ref().map(|a| a.servicio.ramal.id);
+                (
+                    s.estacion_nombre.as_str(),
+                    s.estacion,
+                    ramal.into_iter().collect(),
+                )
+            }))
+            .collect();
+        let mut avisadas = self.avisadas.lock().unwrap();
+        let mut nuevas = vec![];
+        for noticia in todas.iter().filter(|n| n.destacada() && n.vigente(ahora)) {
+            if avisadas.contains(&noticia.id)
+                || preferencias.noticias_avisadas.contains(&noticia.id)
+            {
+                continue;
+            }
+            let lugar = lugares
+                .iter()
+                .find(|(_, estacion, ramales)| noticia.aplica_a(*estacion, ramales));
+            if let Some((lugar, _, _)) = lugar {
+                notificador.notificar_noticia(lugar, noticia);
+                avisadas.insert(noticia.id);
+                nuevas.push(noticia.id);
+            }
+        }
+        drop(avisadas);
+        if !nuevas.is_empty() {
+            preferencias.noticias_avisadas.extend(nuevas);
+            let _ = self.repo.guardar(&preferencias);
+        }
+    }
+
     async fn todas(&self, ahora: DateTime<Utc>) -> Vec<Noticia> {
         let guardadas = self.ultimas.lock().unwrap().clone();
         if let Some((consultada, noticias)) = &guardadas {
@@ -447,7 +505,7 @@ impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
         }
         let noticias = match self.source.noticias().await {
             Ok(noticias) => {
-                self.olvidar_descartadas_ausentes(&noticias);
+                self.olvidar_ausentes(&noticias);
                 noticias
             }
             Err(_) => guardadas.map(|(_, n)| n).unwrap_or_default(),
@@ -464,16 +522,16 @@ impl<S: NoticiasSource, P: PreferenciasRepo, C: Clock> Noticias<S, P, C> {
         Ok(preferencias)
     }
 
-    /// Así la lista de descartadas no crece para siempre.
-    fn olvidar_descartadas_ausentes(&self, publicadas: &[Noticia]) {
+    /// Así las listas de descartadas y avisadas no crecen para siempre.
+    fn olvidar_ausentes(&self, publicadas: &[Noticia]) {
         let Ok(mut preferencias) = self.repo.cargar() else {
             return;
         };
-        let antes = preferencias.noticias_descartadas.len();
-        preferencias
-            .noticias_descartadas
-            .retain(|id| publicadas.iter().any(|n| n.id == *id));
-        if preferencias.noticias_descartadas.len() != antes {
+        let publicada = |id: &u64| publicadas.iter().any(|n| n.id == *id);
+        let antes = preferencias.clone();
+        preferencias.noticias_descartadas.retain(publicada);
+        preferencias.noticias_avisadas.retain(publicada);
+        if preferencias != antes {
             let _ = self.repo.guardar(&preferencias);
         }
     }

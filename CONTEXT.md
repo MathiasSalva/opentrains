@@ -77,7 +77,7 @@ Un Servicio concreto que el usuario sigue en una Estación para recibir Avisos; 
 _Avoid_: Alarma, suscripción
 
 **Aviso**:
-Lo que la app le notifica al usuario sobre un Servicio que sigue: que está por pasar (según la anticipación elegida), que tiene demora o que fue cancelado.
+Lo que la app le notifica al usuario: sobre un Servicio que sigue (que está por pasar según la anticipación elegida, que tiene demora, que fue cancelado o que tuvo un Cambio de andén) o una Noticia destacada de un Favorito o de un Servicio que sigue, una sola vez por Noticia.
 _Avoid_: Alerta, notificación (es el medio, no el concepto)
 
 **Ubicación**:
