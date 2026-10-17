@@ -62,6 +62,25 @@ pub fn pedir_permiso<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Con Favoritos hacen falta las notificaciones aunque no haya Seguimientos: las
+/// Noticias destacadas de sus Ramales también son Avisos. Se revisa una sola vez por
+/// proceso (la UI puede recargarse y volver a pedir las Preferencias); sin Favoritos no
+/// se gasta la vez y se vuelve a revisar al agregar el primero. No bloquea: los comandos
+/// sincrónicos corren en el hilo principal, y el pedido espera la respuesta del diálogo.
+#[cfg(mobile)]
+pub fn pedir_permiso_por_favoritos<R: Runtime>(
+    app: &AppHandle<R>,
+    preferencias: &opentrains_core::dominio::Preferencias,
+) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static REVISADO: AtomicBool = AtomicBool::new(false);
+    if preferencias.favoritos.is_empty() || REVISADO.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || pedir_permiso(&app));
+}
+
 /// Título y cuerpo de la notificación, p. ej. "Retiro (LSM): #3907 a Pilar" / "Sale en 9 min".
 pub fn textos(seguimiento: &Seguimiento, aviso: &Aviso) -> (String, String) {
     let titulo = format!(

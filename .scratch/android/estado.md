@@ -9,7 +9,7 @@ Rama `android-port`. Sigue a la auditoría de `spec.md` (2026-10-13).
 - **Capabilities**: `default.json` se dividió en `escritorio.json` (Windows/macOS/Linux, con `core:window:allow-hide`) y `movil.json` (Android/iOS, `core:default`). Las dos llevan `notification:default`: el script que inyecta el plugin de notificaciones llama a `is_permission_granted` al cargar y sin el permiso tira un error en consola. La ubicación se consulta desde Rust, así que no necesita permisos de ACL.
 - **Ubicación**: `UbicacionSistema` (`ubicacion.rs`) implementa el mismo puerto `UbicacionSource`. En móvil usa `tauri-plugin-geolocation` (dependencia solo para Android/iOS): pide el permiso de ubicación una vez por proceso y consulta una posición de hasta 1 min de antigüedad, sin alta precisión. `crates/core` no cambió.
 - **Manifest**: `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` y `android.hardware.location` opcional.
-- **Notificaciones**: al crear un Seguimiento se pide `POST_NOTIFICATIONS` (Android 13+) si todavía no se decidió (`avisos::pedir_permiso`).
+- **Notificaciones**: se pide `POST_NOTIFICATIONS` (Android 13+) si todavía no se decidió (`avisos::pedir_permiso`) al crear un Seguimiento, y también con Favoritos (sus Noticias destacadas son Avisos): al abrir la app si ya hay alguno, o al agregar el primero (`avisos::pedir_permiso_por_favoritos`, una vez por proceso).
 - **Frontend**: `$lib/plataforma.ts` (`esEscritorio`). `onFocusChanged` y Escape → `hide()` quedan solo en escritorio; en todas las plataformas se refresca al volver con `visibilitychange`. En móvil el refresco de 45 s se saltea con la app oculta. `viewport-fit=cover` y padding con `env(safe-area-inset-*)`.
 
 ## Qué funciona y qué no en Android

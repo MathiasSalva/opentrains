@@ -173,16 +173,30 @@ async fn instalaciones(
 }
 
 #[tauri::command]
-fn preferencias(app: State<'_, AppState>) -> Result<Preferencias, AppError> {
-    Ok(app.favoritos.preferencias()?)
+#[cfg_attr(not(mobile), allow(unused_variables))]
+fn preferencias(
+    handle: tauri::AppHandle,
+    app: State<'_, AppState>,
+) -> Result<Preferencias, AppError> {
+    let preferencias = app.favoritos.preferencias()?;
+    // Favoritos de antes de que sus Noticias fueran Avisos: el permiso de Android 13+
+    // se pide al abrir la app, sin esperar a un Seguimiento.
+    #[cfg(mobile)]
+    avisos::pedir_permiso_por_favoritos(&handle, &preferencias);
+    Ok(preferencias)
 }
 
 #[tauri::command]
+#[cfg_attr(not(mobile), allow(unused_variables))]
 fn agregar_favorito(
+    handle: tauri::AppHandle,
     app: State<'_, AppState>,
     favorito: Favorito,
 ) -> Result<Preferencias, AppError> {
-    Ok(app.favoritos.agregar(favorito)?)
+    let preferencias = app.favoritos.agregar(favorito)?;
+    #[cfg(mobile)]
+    avisos::pedir_permiso_por_favoritos(&handle, &preferencias);
+    Ok(preferencias)
 }
 
 #[tauri::command]
