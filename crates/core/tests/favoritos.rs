@@ -1,5 +1,7 @@
 use opentrains_core::casos_de_uso::Favoritos;
-use opentrains_core::dominio::{Coordenadas, EstacionId, Favorito, Preferencias, Ramal, RamalId};
+use opentrains_core::dominio::{
+    Coordenadas, EstacionId, Favorito, Preferencias, Ramal, RamalId, Tablero, VentanaTablero,
+};
 use opentrains_core::puertos::{PreferenciasRepo, StorageError};
 use std::cell::RefCell;
 
@@ -159,4 +161,55 @@ fn el_aviso_de_ubicacion_se_puede_ocultar_para_siempre() {
 
     assert!(preferencias.aviso_ubicacion_oculto);
     assert!(repo.0.borrow().aviso_ubicacion_oculto);
+}
+
+#[test]
+fn cambiar_la_estacion_del_tablero_conserva_su_ventana() {
+    let repo = FakeRepo::default();
+    let favoritos = Favoritos::new(&repo);
+    favoritos.abrir_tablero(favorito(463, Some(131))).unwrap();
+    let ventana = VentanaTablero {
+        x: 1920,
+        y: 0,
+        ancho: 1920,
+        alto: 1080,
+    };
+    favoritos
+        .recordar_ventana_tablero(Some(ventana.clone()), true)
+        .unwrap();
+
+    let preferencias = favoritos.abrir_tablero(favorito(293, None)).unwrap();
+
+    assert_eq!(
+        preferencias.tablero,
+        Some(Tablero {
+            favorito: favorito(293, None),
+            abierto: true,
+            ventana: Some(ventana),
+            pantalla_completa: true,
+        })
+    );
+}
+
+#[test]
+fn cerrar_el_tablero_recuerda_donde_estaba_para_reabrirlo() {
+    let repo = FakeRepo::default();
+    let favoritos = Favoritos::new(&repo);
+    favoritos.abrir_tablero(favorito(463, None)).unwrap();
+
+    let preferencias = favoritos.cerrar_tablero().unwrap();
+
+    let tablero = preferencias.tablero.unwrap();
+    assert!(!tablero.abierto);
+    assert_eq!(tablero.favorito, favorito(463, None));
+}
+
+#[test]
+fn sin_tablero_no_hay_ventana_que_recordar() {
+    let repo = FakeRepo::default();
+    let favoritos = Favoritos::new(&repo);
+
+    let preferencias = favoritos.recordar_ventana_tablero(None, true).unwrap();
+    assert_eq!(preferencias.tablero, None);
+    assert_eq!(favoritos.cerrar_tablero().unwrap().tablero, None);
 }

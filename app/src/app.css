@@ -78,6 +78,30 @@
   }
 }
 
+/* Siempre oscuro, sea cual sea el tema del sistema: el tablero se lee de lejos y no
+   debería encandilar de noche. Mismos valores que el bloque de arriba. */
+:root.oscuro {
+  color-scheme: dark;
+  --fondo: #0e1014;
+  --superficie: #161a20;
+  --superficie-elevada: #1e232b;
+  --superficie-hover: rgb(255 255 255 / 0.06);
+  --texto: #eceef2;
+  --texto-suave: #a3aab7;
+  --texto-tenue: #7d8494;
+  --borde: rgb(255 255 255 / 0.08);
+  --borde-fuerte: rgb(255 255 255 / 0.14);
+  --acento: #79a7ff;
+  --atencion: #b794ff;
+  --sombra-flotante: 0 10px 32px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+  --en_anden: #34d17a;
+  --en_camino: #38bdd8;
+  --demorado: #fbb13c;
+  --cancelado: #fb6f84;
+  --programado: #9aa1ae;
+  --desconocido: #a3adc2;
+}
+
 /* En pantallas táctiles, objetivos de 44 px y texto un punto más grande. */
 @media (pointer: coarse) {
   :root {

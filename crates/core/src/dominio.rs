@@ -407,4 +407,28 @@ pub struct Preferencias {
     /// Noticias destacadas ya avisadas, por id.
     #[serde(default)]
     pub noticias_avisadas: BTreeSet<u64>,
+    /// El tablero de Estación (escritorio): qué muestra y dónde, para reabrirlo igual.
+    #[serde(default)]
+    pub tablero: Option<Tablero>,
+}
+
+/// Los Arribos de una Estación en una ventana aparte, pensada para un segundo monitor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Tablero {
+    pub favorito: Favorito,
+    /// Si estaba abierto al cerrar la app: así se vuelve a abrir al iniciarla.
+    pub abierto: bool,
+    #[serde(default)]
+    pub ventana: Option<VentanaTablero>,
+    #[serde(default)]
+    pub pantalla_completa: bool,
+}
+
+/// Posición y tamaño de la ventana del tablero, en píxeles físicos del escritorio.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VentanaTablero {
+    pub x: i32,
+    pub y: i32,
+    pub ancho: u32,
+    pub alto: u32,
 }

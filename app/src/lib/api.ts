@@ -120,6 +120,12 @@ export const api = {
   ramales: (linea: number) => invoke<Ramal[]>("ramales", { linea }),
   estaciones: (ramal: number) => invoke<Estacion[]>("estaciones", { ramal }),
   arribos: (favorito: Favorito) => invoke<Arribo[]>("arribos", { favorito }),
+  /** Como `arribos`, pero no cambia el tren que muestra la bandeja. */
+  arribosTablero: (favorito: Favorito) => invoke<Arribo[]>("arribos_tablero", { favorito }),
+  /** Abre el tablero en esa Estación, o lo cambia a ella si ya está abierto. */
+  abrirTablero: (favorito: Favorito) => invoke<void>("abrir_tablero", { favorito }),
+  tablero: () => invoke<Favorito | null>("tablero"),
+  pantallaCompletaTablero: (activa: boolean) => invoke<void>("pantalla_completa_tablero", { activa }),
   noticias: (favorito: Favorito) => invoke<Noticia[]>("noticias", { favorito }),
   descartarNoticia: (id: number) => invoke<Preferencias>("descartar_noticia", { id }),
   instalaciones: (estacion: number) => invoke<Instalaciones | null>("instalaciones", { estacion }),

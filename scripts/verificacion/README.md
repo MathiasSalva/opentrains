@@ -11,6 +11,9 @@ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333 npm run tauri
 - `node shot.mjs captura.png`: captura de la ventana.
 - `node estados.mjs captura.png light|dark`: intercepta `ipc.localhost/arribos` y `/noticias` (Fetch de CDP)
   con todas las Situaciones, un Cambio de andén y Noticias de ejemplo, y captura. `__TAURI_INTERNALS__.invoke` no se puede pisar.
+- Con el tablero abierto hay dos ventanas: `VENTANA=tablero` antes de cualquier script la
+  elige (por defecto, el panel). `estados.mjs` en el tablero recarga la página con los datos
+  de ejemplo, porque no tiene botón de actualizar.
 - `flujo.js`: pegar en `cdp.mjs` para elegir Línea/Ramal/Estación desde los selects.
 
 Logs útiles en stderr: `[avisos]` (notificaciones) y `[bandeja]` (tooltip, solo debug).

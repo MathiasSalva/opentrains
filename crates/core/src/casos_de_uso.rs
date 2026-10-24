@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::dominio::{
     Arribo, Coordenadas, Distancia, Estacion, EstacionId, Favorito, Linea, LineaId, Noticia,
-    Preferencias, Ramal, RamalId, Seguimiento,
+    Preferencias, Ramal, RamalId, Seguimiento, Tablero, VentanaTablero,
 };
 use crate::puertos::{
     ArribosSource, CatalogoCache, CatalogoSource, ClaveCatalogo, Clock, DatosCatalogo,
@@ -218,6 +218,43 @@ impl<P: PreferenciasRepo> Favoritos<P> {
 
     pub fn ocultar_aviso_ubicacion(&self) -> Result<Preferencias, StorageError> {
         self.modificar(|p| p.aviso_ubicacion_oculto = true)
+    }
+
+    /// Abre el tablero en esa Estación (o lo cambia a ella); la ventana queda donde estaba.
+    pub fn abrir_tablero(&self, favorito: Favorito) -> Result<Preferencias, StorageError> {
+        self.modificar(|p| {
+            let anterior = p.tablero.take();
+            p.tablero = Some(Tablero {
+                favorito,
+                abierto: true,
+                ventana: anterior.as_ref().and_then(|t| t.ventana.clone()),
+                pantalla_completa: anterior.is_some_and(|t| t.pantalla_completa),
+            });
+        })
+    }
+
+    /// Lo cerró el usuario: no se reabre al iniciar, pero recuerda dónde estaba.
+    pub fn cerrar_tablero(&self) -> Result<Preferencias, StorageError> {
+        self.modificar(|p| {
+            if let Some(tablero) = &mut p.tablero {
+                tablero.abierto = false;
+            }
+        })
+    }
+
+    pub fn recordar_ventana_tablero(
+        &self,
+        ventana: Option<VentanaTablero>,
+        pantalla_completa: bool,
+    ) -> Result<Preferencias, StorageError> {
+        self.modificar(|p| {
+            if let Some(tablero) = &mut p.tablero {
+                if ventana.is_some() {
+                    tablero.ventana = ventana;
+                }
+                tablero.pantalla_completa = pantalla_completa;
+            }
+        })
     }
 
     fn modificar(

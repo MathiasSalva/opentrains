@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use opentrains_core::dominio::{
-    Coordenadas, EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId,
+    Coordenadas, EstacionId, Favorito, Linea, LineaId, Preferencias, Ramal, RamalId, Tablero,
+    VentanaTablero,
 };
 use opentrains_core::puertos::{
     CatalogoCache, ClaveCatalogo, DatosCatalogo, EntradaCatalogo, PreferenciasRepo,
@@ -27,11 +28,22 @@ fn preferencias() -> Preferencias {
     };
     Preferencias {
         favoritos: vec![retiro.clone()],
-        ultimo_abierto: Some(retiro),
+        ultimo_abierto: Some(retiro.clone()),
         anticipaciones: [(EstacionId(463), 12), (EstacionId(93), 5)].into(),
         aviso_ubicacion_oculto: true,
         noticias_descartadas: [98433, 7001].into(),
         noticias_avisadas: [98500].into(),
+        tablero: Some(Tablero {
+            favorito: retiro.clone(),
+            abierto: true,
+            ventana: Some(VentanaTablero {
+                x: -1920,
+                y: 0,
+                ancho: 1920,
+                alto: 1080,
+            }),
+            pantalla_completa: true,
+        }),
     }
 }
 

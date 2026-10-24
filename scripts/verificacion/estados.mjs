@@ -1,11 +1,14 @@
-// Uso: node estados.mjs <png> <light|dark> [ancho, 420 por defecto; 360 = celular]
+// Uso: [VENTANA=tablero] node estados.mjs <png> <light|dark> [ancho, 420 por defecto; 360 = celular]
 // Muestra todas las Situaciones, un Cambio de andén y Noticias con datos de ejemplo
 // (intercepta los comandos `arribos` y `noticias`) y saca una captura.
 import { writeFileSync } from "node:fs";
 
 const [salida, esquema] = process.argv.slice(2);
+// VENTANA=tablero elige el tablero; por defecto, el panel.
+const esVentana = (t) =>
+  t.type === "page" && (process.env.VENTANA === "tablero") === t.url.includes("/tablero");
 const targets = await (await fetch("http://127.0.0.1:9333/json")).json();
-const ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
+const ws = new WebSocket(targets.find(esVentana).webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
 let id = 0;
 const pendientes = new Map();
@@ -86,7 +89,13 @@ const mock = `(() => {
   document.querySelector('button[title="Actualizar"]').click();
   return new Promise((r) => setTimeout(() => { window.scrollTo(0, document.querySelector('.estacion').offsetTop - 8); r("ok"); }, 1800));
 })()`;
-await enviar("Runtime.evaluate", { expression: mock, awaitPromise: true });
+if (process.env.VENTANA === "tablero") {
+  // En el tablero no hay botón de actualizar: se recarga con la intercepción activa.
+  await enviar("Page.reload");
+  await new Promise((r) => setTimeout(r, 3000));
+} else {
+  await enviar("Runtime.evaluate", { expression: mock, awaitPromise: true });
+}
 await enviar("Fetch.disable");
 const shot = await enviar("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
 writeFileSync(salida, Buffer.from(shot.data, "base64"));

@@ -29,6 +29,7 @@
   import WarningIcon from "phosphor-svelte/lib/WarningIcon";
   import WifiSlashIcon from "phosphor-svelte/lib/WifiSlashIcon";
   import MapPinIcon from "phosphor-svelte/lib/MapPinIcon";
+  import MonitorIcon from "phosphor-svelte/lib/MonitorIcon";
   import { agruparPorRamal, clave, proximo } from "$lib/arribos";
   import { hace } from "$lib/formato";
   import { duracion, EASE } from "$lib/movimiento";
@@ -217,6 +218,15 @@
       preferencias = await api.descartarNoticia(id);
     } catch (e) {
       console.warn(describirError(e));
+    }
+  }
+
+  async function abrirTablero() {
+    if (!actual) return;
+    try {
+      await api.abrirTablero($state.snapshot(actual));
+    } catch (e) {
+      errorArribos = describirError(e);
     }
   }
 
@@ -522,6 +532,16 @@
             >
               <StarIcon size={20} weight={esFavorito ? "fill" : "regular"} />
             </button>
+            {#if esEscritorio}
+              <button
+                class="boton-icono"
+                aria-label="Abrir el tablero de esta estación"
+                title="Abrir tablero"
+                onclick={abrirTablero}
+              >
+                <MonitorIcon size={20} weight="bold" />
+              </button>
+            {/if}
             <button
               class="boton-icono"
               class:girando={cargando}

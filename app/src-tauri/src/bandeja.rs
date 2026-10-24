@@ -35,6 +35,7 @@ pub struct EstadoPanel {
 
 pub fn crear<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
     let abrir = MenuItem::with_id(app, "abrir", "Abrir OpenTrains", true, None::<&str>)?;
+    let tablero = MenuItem::with_id(app, "tablero", "Abrir tablero", true, None::<&str>)?;
     let inicio = CheckMenuItem::with_id(
         app,
         "inicio",
@@ -48,6 +49,7 @@ pub fn crear<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
         app,
         &[
             &abrir,
+            &tablero,
             &inicio,
             &PredefinedMenuItem::separator(app)?,
             &salir,
@@ -61,6 +63,7 @@ pub fn crear<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, evento| match evento.id().as_ref() {
             "abrir" => mostrar(app),
+            "tablero" => crate::tablero::abrir_ultimo(app),
             "inicio" => {
                 let autostart = app.autolaunch();
                 let activar = !autostart.is_enabled().unwrap_or(false);
@@ -71,7 +74,11 @@ pub fn crear<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
                 };
                 let _ = inicio.set_checked(autostart.is_enabled().unwrap_or(false));
             }
-            "salir" => app.exit(0),
+            "salir" => {
+                // Al salir el tablero queda "abierto": así vuelve al iniciar la app.
+                crate::tablero::guardar(app);
+                app.exit(0)
+            }
             _ => {}
         })
         .on_tray_icon_event(|bandeja, evento| {

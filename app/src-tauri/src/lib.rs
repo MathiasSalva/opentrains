@@ -6,6 +6,8 @@ mod avisos;
 mod bandeja;
 #[cfg(desktop)]
 mod insignia;
+#[cfg(desktop)]
+mod tablero;
 mod ubicacion;
 
 use std::path::PathBuf;
@@ -47,6 +49,14 @@ struct AppState {
 enum AppError {
     Fuente(SourceError),
     Almacenamiento(String),
+    /// La ventana del tablero no se pudo crear o cambiar.
+    Ventana(String),
+}
+
+impl From<tauri::Error> for AppError {
+    fn from(error: tauri::Error) -> Self {
+        AppError::Ventana(error.to_string())
+    }
 }
 
 impl From<SourceError> for AppError {
@@ -125,6 +135,42 @@ async fn arribos(
     *app.estacion_abierta.lock().unwrap() = Some((favorito.estacion_nombre, arribos.clone()));
     refrescar_bandeja(&handle);
     Ok(arribos.into_iter().map(ArriboVista::from).collect())
+}
+
+/// Los Arribos del tablero: misma consulta, pero no cambia qué tren muestra la bandeja.
+#[tauri::command]
+async fn arribos_tablero(
+    app: State<'_, AppState>,
+    favorito: Favorito,
+) -> Result<Vec<ArriboVista>, AppError> {
+    let arribos = app.arribos.arribos(&favorito).await?;
+    Ok(arribos.into_iter().map(ArriboVista::from).collect())
+}
+
+/// Abre el tablero en esa Estación, o lo cambia a ella si ya está abierto. Es async para
+/// que la ventana no se cree desde el hilo principal (en Windows eso se traba).
+#[tauri::command]
+async fn abrir_tablero(handle: tauri::AppHandle, favorito: Favorito) -> Result<(), AppError> {
+    #[cfg(desktop)]
+    tablero::abrir(&handle, favorito)?;
+    #[cfg(not(desktop))]
+    let _ = (handle, favorito);
+    Ok(())
+}
+
+/// La Estación que muestra el tablero.
+#[tauri::command]
+fn tablero(app: State<'_, AppState>) -> Result<Option<Favorito>, AppError> {
+    Ok(app.favoritos.preferencias()?.tablero.map(|t| t.favorito))
+}
+
+#[tauri::command]
+async fn pantalla_completa_tablero(handle: tauri::AppHandle, activa: bool) -> Result<(), AppError> {
+    #[cfg(desktop)]
+    tablero::pantalla_completa(&handle, activa)?;
+    #[cfg(not(desktop))]
+    let _ = (handle, activa);
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -433,6 +479,8 @@ pub fn run() {
                 if !std::env::args().any(|a| a == bandeja::ARG_OCULTA) {
                     bandeja::mostrar(app.handle());
                 }
+                app.manage(tablero::EstadoTablero::default());
+                tablero::restaurar(app.handle());
             }
             Ok(())
         })
@@ -441,6 +489,10 @@ pub fn run() {
             ramales,
             estaciones,
             arribos,
+            arribos_tablero,
+            abrir_tablero,
+            tablero,
+            pantalla_completa_tablero,
             instalaciones,
             noticias,
             descartar_noticia,
